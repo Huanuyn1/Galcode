@@ -1,0 +1,156 @@
+// .Title_main {
+//   width: 100%;
+//   height: 100%;
+//   position: absolute;
+//   z-index: 13;
+// }
+
+// .Title_buttonList {
+//   display: flex;
+//   width: 100%;
+//   height: 100%;
+//   justify-content: center;
+//   align-items: flex-end;
+//   gap: var(--title-button-gap, 4rem);
+//   padding-bottom: 5rem;
+// }
+
+// .Title_button {
+//   position: relative;
+//   height: 0.75rem;
+//   font-weight: bold;
+//   text-align: center;
+//   flex: 0 1 auto;
+//   cursor: pointer;
+//   padding: 0.75em 1.5em 0.75em 2em;
+//   transition: all 0.33s;
+//   border-radius: 999px;
+//   background: #ff3b72;
+//   display: flex;
+//   z-index: 10;
+//   box-shadow: 0px 0px 0px 4px #fff, 0px 0px 0px 4px #fff, 0px 0px 0px 4px #fff;
+
+//   &:hover .Title_button_text {
+//     margin-bottom: -0.5rem;
+//   }
+
+//   &.Title_button_disabled:hover .Title_button_text {
+//     margin-bottom: -1rem;
+//   }
+
+//   &::before,
+//   &::after {
+//     content: '';
+//     position: absolute;
+//     width: 32px;
+//     height: 32px;
+//     background: {
+//       size: contain;
+//       repeat: no-repeat;
+//       image: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2232%22%20height%3D%2232%22%20viewBox%3D%220%200%2024%2024%22%3E%3Cpath%20fill%3D%22%23ffee55%22%20d%3D%22M9.153%205.408C10.42%203.136%2011.053%202%2012%202s1.58%201.136%202.847%203.408l.328.588c.36.646.54.969.82%201.182s.63.292%201.33.45l.636.144c2.46.557%203.689.835%203.982%201.776c.292.94-.546%201.921-2.223%203.882l-.434.507c-.476.557-.715.836-.822%201.18c-.107.345-.071.717.001%201.46l.066.677c.253%202.617.38%203.925-.386%204.506s-1.918.051-4.22-1.009l-.597-.274c-.654-.302-.981-.452-1.328-.452s-.674.15-1.328.452l-.596.274c-2.303%201.06-3.455%201.59-4.22%201.01c-.767-.582-.64-1.89-.387-4.507l.066-.676c.072-.744.108-1.116%200-1.46c-.106-.345-.345-.624-.821-1.18l-.434-.508c-1.677-1.96-2.515-2.941-2.223-3.882S3.58%208.328%206.04%207.772l.636-.144c.699-.158%201.048-.237%201.329-.45s.46-.536.82-1.182z%22%2F%3E%3C%2Fsvg%3E');
+//     }
+//     top: 50%;
+//     transform: translateY(-50%);
+//   }
+
+//   &::before {
+//     left: 1rem;
+//   }
+
+//   &::after {
+//     right: 1rem;
+//   }
+// }
+
+// .Title_button_text {
+//   font-size: 200%;
+//   color: #ffffff;
+//   padding: 0 0.5em;
+//   letter-spacing: 0.2em;
+//   display: flex;
+//   position: relative;
+//   flex-direction: column-reverse;
+//   margin-bottom: -1rem;
+//   transition: all 0.2s;
+//   align-items: center;
+
+//   &::before,
+//   &::after {
+//     content: attr(data-content);
+//     position: absolute;
+//   }
+
+//   &::before {
+//     -webkit-text-stroke: 20px #ffffff;
+//     z-index: -2;
+//   }
+
+//   &::after {
+//     -webkit-text-stroke: 12px #ff3b72;
+//     z-index: -1;
+//   }
+// }
+
+// .Title_backup_background {
+//   width: 100%;
+//   height: 100%;
+//   position: absolute;
+//   z-index: 13;
+//   background: linear-gradient(135deg, #fdfbfb 0%, #dcddde 100%);
+// }
+
+// .Title_button_disabled {
+//   cursor: not-allowed !important;
+//   background: #505050;
+
+//   &::before,
+//   &::after {
+//     background: {
+//       image: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2232%22%20height%3D%2232%22%20viewBox%3D%220%200%2024%2024%22%3E%3Cpath%20fill%3D%22%23a3a3a3%22%20d%3D%22M9.153%205.408C10.42%203.136%2011.053%202%2012%202s1.58%201.136%202.847%203.408l.328.588c.36.646.54.969.82%201.182s.63.292%201.33.45l.636.144c2.46.557%203.689.835%203.982%201.776c.292.94-.546%201.921-2.223%203.882l-.434.507c-.476.557-.715.836-.822%201.18c-.107.345-.071.717.001%201.46l.066.677c.253%202.617.38%203.925-.386%204.506s-1.918.051-4.22-1.009l-.597-.274c-.654-.302-.981-.452-1.328-.452s-.674.15-1.328.452l-.596.274c-2.303%201.06-3.455%201.59-4.22%201.01c-.767-.582-.64-1.89-.387-4.507l.066-.676c.072-.744.108-1.116%200-1.46c-.106-.345-.345-.624-.821-1.18l-.434-.508c-1.677-1.96-2.515-2.941-2.223-3.882S3.58%208.328%206.04%207.772l.636-.144c.699-.158%201.048-.237%201.329-.45s.46-.536.82-1.182z%22%2F%3E%3C%2Fsvg%3E');
+//     }
+//   }
+
+//   & .Title_button_text {
+//     font-size: 200%;
+//     color: #ffffff;
+//     // padding: 0 0.5em;
+//     padding: 0 0;
+//     letter-spacing: 0.2em;
+//     display: flex;
+//     position: relative;
+//     flex-direction: column-reverse;
+//     margin-bottom: -1rem;
+//     transition: all 0.2s;
+//     align-items: center;
+
+//     &::before,
+//     &::after {
+//       content: attr(data-content);
+//       position: absolute;
+//     }
+
+//     &::before {
+//       -webkit-text-stroke: 20px #ffffff;
+//       z-index: -2;
+//     }
+
+//     &::after {
+//       -webkit-text-stroke: 12px #505050;
+//       z-index: -1;
+//     }
+//   }
+// }
+
+// .Title_version_info {
+//   position: absolute;
+//   display: flex;
+//   z-index: 15;
+//   font-size: 100%;
+//   right: 2rem;
+//   top: 1rem;
+//   color: white;
+//   opacity: 0.75;
+//   flex-direction: column;
+//   align-items: flex-end;
+//   text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5), -2px -2px 4px rgba(255, 255, 255, 0.5);
+// }
