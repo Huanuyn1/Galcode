@@ -1,0 +1,15 @@
+{
+  "type": "Live2D Expression",
+  "fade_in": 300,
+  "fade_out": 300,
+  "params": [
+    {
+      "id": "PARAM_mask_1",
+      "val": 1
+    },
+    {
+      "id": "_PARAM_mask_1",
+      "val": 1
+    }
+  ]
+}
