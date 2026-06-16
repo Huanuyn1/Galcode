@@ -1,0 +1,13 @@
+{
+  "explorer.fileNesting.enabled": true,
+  "explorer.fileNesting.patterns": {
+    "package.json": "npm*,.npm*,yarn*,.yarn*,.editorconfig,LICENSE",
+    "README.md": "*.md",
+    ".gitignore": ".git*",
+    "release-to-server.sh": "*.sh",
+    "index.js":"index*",
+    "rollup.config.js": "*config.js,*config.json,*rc",
+    "vite.config.ts": "*config.js,*config.json,*rc,.eslint*,eslint*,.prettier*,prettier*"
+  },
+  "oxc.enable": false
+}

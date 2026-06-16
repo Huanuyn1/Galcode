@@ -1,0 +1,29 @@
+{
+  "name": "@webgal/base",
+  "version": "4.5",
+  "description": "A brand new web Visual Novel engine.",
+  "repository": "https://github.com/OpenWebGAL/WebGAL.git",
+  "author": "Mahiru <Mahiru_@outlook.com>",
+  "scripts": {
+    "build": "yarn parser:build && yarn webgal:build",
+    "build-ci": "yarn parser:build-ci && yarn webgal:build",
+    "dev": "yarn parser:build && yarn webgal:dev",
+    "webgal:dev": "cd packages/webgal && yarn dev",
+    "webgal:build": "cd packages/webgal && yarn build",
+    "parser:test": "cd packages/parser && yarn test",
+    "parser:test-coverage": "cd packages/parser && yarn coverage",
+    "parser:build": "cd packages/parser && yarn build",
+    "parser:build-ci": "cd packages/parser && yarn build-ci"
+  },
+  "license": "MPL-2.0",
+  "workspaces": {
+    "packages": [
+      "packages/*"
+    ]
+  },
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "packageManager": "yarn@1.22.22"
+}

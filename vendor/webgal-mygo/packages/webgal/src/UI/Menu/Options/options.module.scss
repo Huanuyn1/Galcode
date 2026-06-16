@@ -1,0 +1,120 @@
+.Options_main {
+  position: absolute;
+  cursor: default;
+  height: 90%;
+  width: 100%;
+  padding: 4rem 7.5rem 0rem;
+}
+
+.Options_top {
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+  margin-bottom: 3rem;
+}
+
+.Options_icon {
+  height: 6rem;
+}
+
+.Options_title {
+  letter-spacing: 0.1em;
+  font-size: 225%;
+  padding-left: 3rem;
+  box-sizing: border-box;
+  width: 100%;
+  border-bottom: 8px solid #fe3a70;
+}
+
+.Option_title_text {
+  font-size: 145%;
+  color: #505050;
+  line-height: normal;
+}
+
+.Option_title_text_shadow {
+  position: absolute;
+  color: rgba(0, 0, 0, 0);
+  -webkit-text-stroke: 3px rgba(0, 0, 0, 1);
+  z-index: -1;
+}
+
+.Option_title_text_ts {
+  position: absolute;
+  color: rgba(0, 0, 0, 0);
+  text-shadow: 0.04em 0.04em rgba(81, 110, 65, 0.9), 0.05em 0.05em rgba(81, 110, 65, 0.9),
+    0.06em 0.06em rgba(81, 110, 65, 0.9), 0.07em 0.07em rgba(81, 110, 65, 0.9);
+  z-index: -1;
+}
+
+.Options_main_content {
+  display: flex;
+  flex: 1;
+  overflow: auto;
+}
+
+.Options_main_content_half {
+  display: flex;
+  flex-flow: row;
+  align-items: flex-start;
+  align-content: flex-start;
+  flex-wrap: wrap;
+  gap: 3.25rem 4rem;
+  padding-right: 3rem;
+  width: 100%;
+  position: relative;
+}
+
+.About_title_text {
+  margin: 0.2em 1em 0.2em 1em;
+  padding: 0.2em 0.2em 0.2em 0.2em;
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  animation: Elements_in ease-out 0.7s forwards;
+  cursor: pointer;
+}
+
+.About_text {
+  font-weight: bold;
+  color: transparent;
+  background: linear-gradient(to left, rgba(34, 125, 81, 0.65), rgba(81, 110, 65, 0.65));
+  -webkit-background-clip: text;
+  background-clip: text;
+  font-size: 135%;
+  text-decoration: underline;
+}
+
+.Options_page_container {
+  height: 85%;
+  display: flex;
+  flex-direction: column;
+  gap: 3rem;
+}
+
+.Options_button_list {
+  display: flex;
+  background: #ff5585;
+  border-radius: 999px;
+  justify-content: space-around;
+  padding: 0.5rem;
+}
+
+.Options_page_button {
+  font-size: 200%;
+  // font-weight: bold;
+  color: #ffffff;
+  cursor: pointer;
+  flex: 1;
+  text-align: center;
+}
+
+.Options_page_button_active {
+  color: #ff5585;
+  background: #ffffff;
+  border-radius: 999px;
+}
+
+.Options_page_button:hover {
+  opacity: 1;
+}

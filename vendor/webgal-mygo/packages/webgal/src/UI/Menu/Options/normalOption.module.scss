@@ -1,0 +1,43 @@
+.NormalOption {
+  display: flex;
+  flex-flow: column;
+  align-items: flex-start;
+  gap: 2rem;
+}
+
+.NormalOption_title {
+  color: #ffffff;
+  background: #505050;
+  font-size: 160%;
+  padding: 0.15em 1em;
+  width: 100%;
+  border-radius: 999px;
+}
+
+.NormalOption_title_bef {
+  font-weight: bold;
+  font-size: 200%;
+  content: attr(data-text);
+  position: absolute;
+  -webkit-text-stroke: 3px rgba(0, 0, 0, 1);
+  z-index: -1;
+  padding: 0.15em 0.5em 0.15em 0.1em;
+}
+
+.NormalOption_title_sd {
+  font-weight: bold;
+  color: rgba(0, 0, 0, 0);
+  font-size: 200%;
+  position: absolute;
+  z-index: -1;
+  padding: 0.15em 0.5em 0.15em 0.1em;
+  text-shadow: 0.04em 0.04em rgba(81, 110, 65, 0.9), 0.05em 0.05em rgba(81, 110, 65, 0.9),
+    0.06em 0.06em rgba(81, 110, 65, 0.9), 0.07em 0.07em rgba(81, 110, 65, 0.9), 0.08em 0.08em rgba(81, 110, 65, 0.9),
+    0.09em 0.09em rgba(81, 110, 65, 0.9), 0.1em 0.1em rgba(81, 110, 65, 0.9);
+}
+
+.NormalOption_buttonList {
+  display: flex;
+  gap: 2rem;
+  padding: 0 3rem;
+}

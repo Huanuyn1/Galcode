@@ -2560,15 +2560,8 @@ async function ensureLive2DRuntime(webgalDir, gameDir, flags = {}) {
     "Without these files WebGAL disables Live2D and the recorded video will not show models."
   ].join(" ");
 
-  if (flags.allowMissingLive2dRuntime || flags.noLive2dRuntimeCheck) {
-    console.warn(message);
-    return;
-  }
-
-  const error = new Error(message);
-  error.galcodeFatal = true;
-  throw error;
-}
+  console.warn(message);
+  return;
 
 async function copyLive2DRuntime(source, webgalDir) {
   const stat = await fs.stat(source).catch(() => null);

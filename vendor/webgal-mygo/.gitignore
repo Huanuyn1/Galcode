@@ -1,0 +1,34 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.eslintcache
+stats.html
+packages/webgal/public/game.old
+packages/parser/build
+packages/webgal/src/Core/util/pixiPerformManager/initRegister.ts
+
+packages/webgal/public/game/figure/**/*
+!logos.webp
+packages/webgal/public/lib/**/*

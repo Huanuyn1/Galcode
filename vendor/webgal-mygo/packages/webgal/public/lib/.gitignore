@@ -1,0 +1,5 @@
+*
+!.gitignore
+!LIVE2D_RUNTIME_SOURCES.md
+!live2d.min.js
+!live2dcubismcore.min.js
