@@ -797,19 +797,29 @@ async function generateStory({ brief, manifest, flags, mode }) {
 async function callOpenAI(messages, flags) {
   const baseUrl = process.env.OPENAI_BASE_URL || "https://api.openai.com/v1";
   const model = flags.model || process.env.OPENAI_MODEL || "gpt-4.1-mini";
-  const response = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${process.env.OPENAI_API_KEY}`
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      temperature: Number(process.env.OPENAI_TEMPERATURE || 1),
-      response_format: { type: "json_object" }
-    })
-  });
+  const url = `${baseUrl.replace(/\/$/, "")}/chat/completions`;
+  let response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${process.env.OPENAI_API_KEY}`
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        temperature: Number(process.env.OPENAI_TEMPERATURE || 1),
+        response_format: { type: "json_object" }
+      })
+    });
+  } catch (err) {
+    throw new Error(
+      `Cannot reach ${baseUrl}\n` +
+      `Error: ${err.message}\n` +
+      `Check OPENAI_BASE_URL in .env and your network connection.`
+    );
+  }
 
   if (!response.ok) {
     throw new Error(`AI request failed ${response.status}: ${await response.text()}`);
