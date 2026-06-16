@@ -25,7 +25,7 @@ fi
 echo "[1/4] Node.js: $($NODE --version)"
 
 # ── 2. npm deps ──
-echo "[2/4] Installing npm dependencies..."
+echo "[2/4] Installing dependencies..."
 cd "$ROOT_DIR"
 $NPM install 2>&1 | tail -3
 
@@ -38,10 +38,14 @@ if [[ ! -f "$WEBGAL_DIR/packages/webgal/package.json" ]]; then
   mkdir -p "$ROOT_DIR/vendor"
   TMP_ZIP=$(mktemp).zip
   curl -L --retry 3 -o "$TMP_ZIP" "https://github.com/boomwwww/webgal-mygo/archive/refs/heads/main.zip" || {
-    echo "       Download failed. Run: galcode download-assets --target webgal-mygo"
+    echo "       Download failed."
     exit 1
   }
-  unzip -qo "$TMP_ZIP" -d "$ROOT_DIR/vendor/"
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    ditto -x -k "$TMP_ZIP" "$ROOT_DIR/vendor/"
+  else
+    yes n 2>/dev/null | unzip -qo "$TMP_ZIP" -d "$ROOT_DIR/vendor/" 2>/dev/null || true
+  fi
   rm -f "$TMP_ZIP"
   for d in "$ROOT_DIR"/vendor/webgal-mygo-*; do
     [[ -d "$d" ]] && mv "$d" "$WEBGAL_DIR" && break
@@ -51,7 +55,7 @@ if [[ -f "$WEBGAL_DIR/packages/webgal/package.json" ]]; then
   echo "       Engine: OK"
   if [[ ! -d "$WEBGAL_DIR/node_modules" ]]; then
     echo "       Installing WebGAL deps..."
-    cd "$WEBGAL_DIR" && $NPM install --legacy-peer-deps 2>&1 | tail -2
+    cd "$WEBGAL_DIR" && $NPM install 2>&1 | tail -2
   fi
 else
   echo "       Engine not found. Skipping."
@@ -73,5 +77,5 @@ chmod +x "$TARGET"
 echo
 echo "Done! Run: galcode --help"
 if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
-  echo "First add to PATH: echo 'export PATH=\"$BIN_DIR:\$PATH\"' >> ~/.zshrc && source ~/.zshrc"
+  echo "First add to PATH: export PATH=\"$BIN_DIR:\$PATH\""
 fi
