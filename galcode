@@ -1,5 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export PATH="$ROOT_DIR/tools/bin:$PATH"
-exec "$ROOT_DIR/tools/bin/node" "$ROOT_DIR/bin/galcode.js" "$@"
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+
+if [[ -x "$ROOT_DIR/tools/bin/node" ]]; then
+  export PATH="$ROOT_DIR/tools/bin:$PATH"
+  NODE="$ROOT_DIR/tools/bin/node"
+elif command -v node >/dev/null 2>&1; then
+  NODE="$(command -v node)"
+else
+  echo "Galcode needs Node.js >=20, but no Node runtime was found." >&2
+  echo "Install Node.js, or restore the migrated tools/bin/node runtime." >&2
+  exit 127
+fi
+
+exec "$NODE" "$ROOT_DIR/bin/galcode.js" "$@"

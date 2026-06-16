@@ -1,3 +1,9 @@
+node_modules/
+.env
+.galcode/
+outputs/
+work/
+
 vendor/webgal-mygo/node_modules/
 vendor/webgal-mygo/packages/webgal/node_modules/
 vendor/webgal-mygo/packages/parser/node_modules/

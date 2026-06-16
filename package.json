@@ -1,6 +1,6 @@
 {
   "name": "galcode",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "AI-assisted CLI pipeline for generating MyGO/Ave Mujica WebGAL fan works and recording them as videos.",
   "type": "module",
   "bin": {

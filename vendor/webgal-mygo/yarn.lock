@@ -5677,7 +5677,7 @@ void-elements@3.1.0:
   resolved "https://registry.npmjs.org/void-elements/-/void-elements-3.1.0.tgz"
   integrity sha512-Dhxzh5HZuiHQhbvTW9AMetFfBHDMYpo23Uo9btPXgdYP+3T5S+p+jgNy7spra+veYhBP2dCSgxR/i2Y02h5/6w==
 
-"webgal-engine@file:/Users/huanuyn/Documents/Codex/2026-06-12/webgal-webgal-b/vendor/webgal-mygo/packages/webgal":
+"webgal-engine@file:/Users/huanuyn/Galcode/vendor/webgal-mygo/packages/webgal":
   version "4.5.18"
   resolved "file:packages/webgal"
   dependencies:
@@ -5706,7 +5706,7 @@ void-elements@3.1.0:
     uuid "^9.0.0"
     vite-plugin-package-version "^1.0.2"
 
-"webgal-parser@file:/Users/huanuyn/Documents/Codex/2026-06-12/webgal-webgal-b/vendor/webgal-mygo/packages/parser":
+"webgal-parser@file:/Users/huanuyn/Galcode/vendor/webgal-mygo/packages/parser":
   version "4.5.18"
   resolved "file:packages/parser"
   dependencies:
@@ -5715,7 +5715,7 @@ void-elements@3.1.0:
     lodash "^4.17.21"
     tsx "^3.12.7"
 
-"WebGAL-Server@file:/Users/huanuyn/Documents/Codex/2026-06-12/webgal-webgal-b/vendor/webgal-mygo/packages/server":
+"WebGAL-Server@file:/Users/huanuyn/Galcode/vendor/webgal-mygo/packages/server":
   version "0.1.0"
   resolved "file:packages/server"
   dependencies:

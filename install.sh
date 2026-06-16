@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BIN_DIR="${GALCODE_BIN_DIR:-$HOME/.local/bin}"
 TARGET="$BIN_DIR/galcode"
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 echo "========================================"
 echo " Galcode Installer"
@@ -34,6 +35,7 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
   ELECTRON_FW="$ROOT_DIR/node_modules/electron/dist/Electron.app/Contents/Frameworks/Electron Framework.framework"
   if [[ ! -d "$ELECTRON_FW" ]]; then
     echo "       Electron Framework missing, fixing..."
+    rm -rf "$ROOT_DIR/node_modules/electron/dist" "$ROOT_DIR/node_modules/electron/path.txt"
     cd "$ROOT_DIR/node_modules/electron" && $NODE install.js 2>&1 | tail -2
     cd "$ROOT_DIR"
   fi
@@ -80,6 +82,7 @@ cat > "$TARGET" <<LAUNCHER
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT_DIR="$ROOT_DIR"
+export PATH="/opt/homebrew/bin:/usr/local/bin:\$PATH"
 $NODE_PATH
 exec "$NODE" "\$ROOT_DIR/bin/galcode.js" "\$@"
 LAUNCHER
