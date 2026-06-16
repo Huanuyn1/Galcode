@@ -2561,7 +2561,7 @@ async function ensureLive2DRuntime(webgalDir, gameDir, flags = {}) {
   ].join(" ");
 
   console.warn(message);
-}
+  return;
 
 async function copyLive2DRuntime(source, webgalDir) {
   const stat = await fs.stat(source).catch(() => null);
