@@ -806,7 +806,7 @@ async function callOpenAI(messages, flags) {
     body: JSON.stringify({
       model,
       messages,
-      temperature: 0.9,
+      temperature: Number(process.env.OPENAI_TEMPERATURE || 1),
       response_format: { type: "json_object" }
     })
   });
@@ -2349,7 +2349,7 @@ async function recordWithElectronOffscreen(url, { width, height, duration, fps, 
     env: {
       ...process.env,
       ELECTRON_ENABLE_LOGGING: flags.electronLogs ? "1" : process.env.ELECTRON_ENABLE_LOGGING || "",
-      PATH: `${path.resolve("tools/bin")}${path.delimiter}${process.env.PATH || ""}`
+      PATH: `${resolveToolsBin()}${path.delimiter}${process.env.PATH || ""}`
     }
   });
 }
