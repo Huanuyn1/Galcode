@@ -182,9 +182,12 @@ async function main() {
   console.error(`Galcode electron output: ${out} (${outStat ? outStat.size + " bytes" : "MISSING"})`);
 
   win.destroy();
-  if (outStat && outStat.size > 0) process.exit(0);
+  if (outStat && outStat.size > 0) {
+    app.exit(0);
+    return;
+  }
   console.error("Galcode electron output file missing or empty");
-  process.exit(1);
+  app.exit(1);
 }
 
 async function autoplay(win) {

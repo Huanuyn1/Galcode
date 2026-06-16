@@ -29,16 +29,39 @@ async function safeRmDir(target) {
 }
 
 async function findElectronBinary() {
-  if (process.env.ELECTRON && fssync.existsSync(process.env.ELECTRON)) return process.env.ELECTRON;
+  if (process.env.ELECTRON && fssync.existsSync(process.env.ELECTRON)) {
+    assertElectronRuntimeComplete(process.env.ELECTRON);
+    return process.env.ELECTRON;
+  }
   const candidates = isWindows
     ? ["node_modules/electron/dist/electron.exe"]
     : isMac
     ? ["node_modules/electron/dist/Electron.app/Contents/MacOS/Electron"]
     : ["node_modules/electron/dist/electron"];
-  for (const c of candidates) { if (fssync.existsSync(path.resolve(c))) return path.resolve(c); }
+  for (const c of candidates) {
+    const resolved = path.resolve(c);
+    if (fssync.existsSync(resolved)) {
+      assertElectronRuntimeComplete(resolved);
+      return resolved;
+    }
+  }
   const shim = path.resolve(isWindows ? "node_modules/.bin/electron.cmd" : "node_modules/.bin/electron");
   if (fssync.existsSync(shim)) return shim;
   return await commandExists("electron") ? "electron" : "";
+}
+
+function assertElectronRuntimeComplete(electronPath) {
+  if (!isMac || !electronPath.includes("Electron.app/Contents/MacOS/Electron")) return;
+  const framework = path.join(
+    path.dirname(electronPath),
+    "..",
+    "Frameworks",
+    "Electron Framework.framework",
+    "Electron Framework"
+  );
+  if (!fssync.existsSync(framework)) {
+    throw new Error("Electron install is incomplete: Electron Framework.framework is missing. Run `./install.sh` or reinstall dependencies with `npm install --include=optional`.");
+  }
 }
 
 function resolveToolsBin() {
@@ -1605,12 +1628,10 @@ async function compileStory(story, manifest, outDir, flags) {
 
   await ensureDir(outDir);
   const gameDir = path.join(outDir, "game");
-  const dirs = ["scene", "background", "figure", "bgm", "voice", "video"];
+  const dirs = ["scene", "background", "figure", "bgm", "voice", "video", "animation"];
   for (const dir of dirs) await ensureDir(path.join(gameDir, dir));
 
-  // Write minimal config.txt so WebGAL can initialize its renderer.
-  // Without this file, infoFetcher 404s and PixiJS canvas is never created.
-  await fs.writeFile(path.join(gameDir, "config.txt"), "Game_key:galcode-demo;\n", "utf8");
+  await ensureWebGALRuntimeFiles(gameDir);
 
   const assetMap = new Map(manifest.assets.map((asset) => [asset.id, asset]));
   const copied = new Map();
@@ -2528,6 +2549,7 @@ async function startWebGALPreview(projectDir, flags) {
   await fs.rm(publicGameDir, { recursive: true, force: true });
   if (baseGameDir && fssync.existsSync(baseGameDir)) await copyDir(baseGameDir, publicGameDir);
   else await ensureDir(publicGameDir);
+  await ensureWebGALRuntimeFiles(sourceGameDir);
   await copyDir(sourceGameDir, publicGameDir);
   await ensureLive2DRuntime(webgalDir, sourceGameDir, flags);
   const port = Number(flags.port || await findOpenPort(3000));
@@ -2541,6 +2563,26 @@ async function startWebGALPreview(projectDir, flags) {
   await waitForUrl(url, Number(flags.webgalTimeout || 60000));
   console.log(`Auto-started WebGAL preview: ${url}`);
   return { child, url };
+}
+
+async function ensureWebGALRuntimeFiles(gameDir) {
+  await ensureDir(gameDir);
+  await ensureDir(path.join(gameDir, "animation"));
+
+  const configFile = path.join(gameDir, "config.txt");
+  if (!fssync.existsSync(configFile)) {
+    await fs.writeFile(configFile, "Game_key:galcode-demo;\n", "utf8");
+  }
+
+  const animationTable = path.join(gameDir, "animation", "animationTable.json");
+  if (!fssync.existsSync(animationTable)) {
+    await fs.writeFile(animationTable, "[]\n", "utf8");
+  }
+
+  const userStyleSheet = path.join(gameDir, "userStyleSheet.css");
+  if (!fssync.existsSync(userStyleSheet)) {
+    await fs.writeFile(userStyleSheet, "", "utf8");
+  }
 }
 
 async function ensureLive2DRuntime(webgalDir, gameDir, flags = {}) {
@@ -2562,6 +2604,7 @@ async function ensureLive2DRuntime(webgalDir, gameDir, flags = {}) {
 
   console.warn(message);
   return;
+}
 
 async function copyLive2DRuntime(source, webgalDir) {
   const stat = await fs.stat(source).catch(() => null);

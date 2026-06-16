@@ -34,6 +34,7 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
   ELECTRON_FW="$ROOT_DIR/node_modules/electron/dist/Electron.app/Contents/Frameworks/Electron Framework.framework"
   if [[ ! -d "$ELECTRON_FW" ]]; then
     echo "       Electron Framework missing, fixing..."
+    rm -rf "$ROOT_DIR/node_modules/electron/dist" "$ROOT_DIR/node_modules/electron/path.txt"
     cd "$ROOT_DIR/node_modules/electron" && $NODE install.js 2>&1 | tail -2
     cd "$ROOT_DIR"
   fi
