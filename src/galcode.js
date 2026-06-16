@@ -8,6 +8,43 @@ import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { spawn } from "node:child_process";
 
+// Cross-platform helpers.  Code is shared across macOS / Linux / Windows;
+// only the launcher scripts (galcode / galcode.bat) and README differ.
+const isWindows = process.platform === "win32";
+const isMac = process.platform === "darwin";
+
+async function extractZip(zipPath, destDir) {
+  if (isWindows) {
+    await run("powershell", ["-NoProfile", "-Command",
+      `Expand-Archive -Force -Path '${zipPath}' -DestinationPath '${destDir}'`]);
+  } else {
+    await run("ditto", ["-x", "-k", zipPath, destDir]);
+  }
+}
+
+async function safeRmDir(target) {
+  try { await fs.rm(target, { recursive: true, force: true }); } catch {
+    await run(isWindows ? "cmd" : "rm", isWindows ? ["/c","rd","/s","/q",target] : ["-rf",target]);
+  }
+}
+
+async function findElectronBinary() {
+  if (process.env.ELECTRON && fssync.existsSync(process.env.ELECTRON)) return process.env.ELECTRON;
+  const candidates = isWindows
+    ? ["node_modules/electron/dist/electron.exe"]
+    : isMac
+    ? ["node_modules/electron/dist/Electron.app/Contents/MacOS/Electron"]
+    : ["node_modules/electron/dist/electron"];
+  for (const c of candidates) { if (fssync.existsSync(path.resolve(c))) return path.resolve(c); }
+  const shim = path.resolve(isWindows ? "node_modules/.bin/electron.cmd" : "node_modules/.bin/electron");
+  if (fssync.existsSync(shim)) return shim;
+  return await commandExists("electron") ? "electron" : "";
+}
+
+function resolveToolsBin() {
+  return (isMac && fssync.existsSync(path.resolve("tools/bin"))) ? path.resolve("tools/bin") : "";
+}
+
 const DEFAULT_ENGINE_REPO = "https://github.com/OpenWebGAL/WebGAL.git";
 const DEFAULT_ARCHIVE_REPO = "https://github.com/KonshinHaoshin/mygoxmujica_archive.git";
 const DEFAULT_STATIC_ARCHIVE_REPO = "https://github.com/Furinaaa-Cancan/mygo-mujica-archive.git";
@@ -539,7 +576,7 @@ async function downloadAssetsCommand(flags) {
   if (fssync.existsSync(config.finalDir)) {
     await fs.rm(config.finalDir, { recursive: true, force: true });
   }
-  await run("ditto", ["-x", "-k", config.zip, root]);
+  await extractZip(config.zip, root);
   await fs.rename(config.extractedDir, config.finalDir);
   console.log(`Ready: ${config.finalDir}`);
 }
@@ -1494,15 +1531,9 @@ async function prepareLive2DAssets(manifest, flags = {}, brief = {}) {
     const target = path.join(cacheRoot, candidate.archive.id);
     const marker = path.join(target, ".galcode-extracted.json");
     if (!fssync.existsSync(marker) || flags.forceLive2d) {
-      try {
-        await fs.rm(target, { recursive: true, force: true });
-      } catch {
-        // Some zip contents (e.g. dot-prefixed .mtn_exp directories)
-        // resist Node's fs.rm; fall back to shell.
-        await run("rm", ["-rf", target]);
-      }
+      await safeRmDir(target);
       await ensureDir(target);
-      await run("ditto", ["-x", "-k", candidate.archive.path, target]);
+      await extractZip(candidate.archive.path, target);
       await writeJson(marker, {
         source: candidate.archive.path,
         extractedAt: new Date().toISOString()
@@ -1720,7 +1751,7 @@ async function resolveThemeDir(flags = {}) {
   if (!fssync.existsSync(marker) || flags.forceTheme) {
     await fs.rm(cacheRoot, { recursive: true, force: true });
     await ensureDir(cacheRoot);
-    await run("ditto", ["-x", "-k", archive, cacheRoot]);
+    await extractZip(archive, cacheRoot);
     await writeJson(marker, {
       source: archive,
       extractedAt: new Date().toISOString()
@@ -2374,15 +2405,6 @@ function runRecorderProcess(command, args, options = {}) {
   });
 }
 
-async function findElectronBinary() {
-  if (process.env.ELECTRON && fssync.existsSync(process.env.ELECTRON)) return process.env.ELECTRON;
-  const localMac = path.resolve("node_modules/electron/dist/Electron.app/Contents/MacOS/Electron");
-  if (fssync.existsSync(localMac)) return localMac;
-  const localBin = path.resolve("node_modules/.bin/electron");
-  if (fssync.existsSync(localBin)) return localBin;
-  return await commandExists("electron") ? "electron" : "";
-}
-
 async function recordWithAVFoundation(browser, url, { width, height, duration, fps, out, flags }) {
   const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
   await prepareRecordPage(page, url, { width, height, flags });
@@ -2599,7 +2621,7 @@ async function ensureWebGALBaseGame(flags = {}) {
   const zip = path.resolve("tools/downloads/webgal-mygo-main.zip");
   if (fssync.existsSync(zip)) {
     await ensureDir(path.dirname(cached));
-    await run("ditto", ["-x", "-k", zip, path.resolve(".galcode/webgal-base")]);
+    await extractZip(zip, path.resolve(".galcode/webgal-base"));
     if (fssync.existsSync(cached)) return cached;
   }
   return "";
