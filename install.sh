@@ -5,24 +5,33 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BIN_DIR="${GALCODE_BIN_DIR:-$HOME/.local/bin}"
 TARGET="$BIN_DIR/galcode"
 
+# Find node: prefer bundled macOS binary, fall back to system
+if [[ -x "$ROOT_DIR/tools/bin/node" ]]; then
+  NODE="$ROOT_DIR/tools/bin/node"
+  NODE_PATH='export PATH="$ROOT_DIR/tools/bin:$PATH"'
+elif command -v node &>/dev/null; then
+  NODE="$(command -v node)"
+  NODE_PATH=""
+else
+  echo "============================================="
+  echo " Node.js not found."
+  echo " macOS:  brew install node"
+  echo " Linux:  sudo apt install nodejs npm"
+  echo " Or download from https://nodejs.org"
+  echo "============================================="
+  exit 1
+fi
+
 mkdir -p "$BIN_DIR"
 chmod +x "$ROOT_DIR/galcode" "$ROOT_DIR/bin/galcode.js" 2>/dev/null || true
 
-cat > "$TARGET" <<'SCRIPT'
+cat > "$TARGET" <<ENDSCRIPT
 #!/usr/bin/env bash
 set -euo pipefail
-ROOT_DIR="__ROOT_DIR__"
-if [[ "$(uname -s)" == "Darwin" ]] && [[ -x "$ROOT_DIR/tools/bin/node" ]]; then
-  NODE="$ROOT_DIR/tools/bin/node"
-  export PATH="$ROOT_DIR/tools/bin:$PATH"
-else
-  NODE="$(command -v node)" || { echo "node >= 20 is required"; exit 1; }
-fi
-exec "$NODE" "$ROOT_DIR/bin/galcode.js" "$@"
-SCRIPT
-
-# Replace placeholder with actual path
-sed -i '' "s|__ROOT_DIR__|$ROOT_DIR|g" "$TARGET" 2>/dev/null || sed -i "s|__ROOT_DIR__|$ROOT_DIR|g" "$TARGET"
+ROOT_DIR="$ROOT_DIR"
+$NODE_PATH
+exec "$NODE" "\$ROOT_DIR/bin/galcode.js" "\$@"
+ENDSCRIPT
 chmod +x "$TARGET"
 
 echo "Galcode installed: $TARGET"
