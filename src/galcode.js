@@ -2566,7 +2566,7 @@ async function ensureLive2DRuntime(webgalDir, gameDir, flags = {}) {
   }
 
   const error = new Error(message);
-  error.galcodeFatal = true;
+  return;
   throw error;
 }
 
