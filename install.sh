@@ -27,7 +27,17 @@ echo "[1/4] Node.js: $($NODE --version)"
 # ── 2. npm deps ──
 echo "[2/4] Installing dependencies..."
 cd "$ROOT_DIR"
-$NPM install 2>&1 | tail -3
+$NPM install --include=optional 2>&1 | tail -3
+
+# Ensure Electron Framework is intact (macOS only)
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  ELECTRON_FW="$ROOT_DIR/node_modules/electron/dist/Electron.app/Contents/Frameworks/Electron Framework.framework"
+  if [[ ! -d "$ELECTRON_FW" ]]; then
+    echo "       Electron Framework missing, fixing..."
+    cd "$ROOT_DIR/node_modules/electron" && $NODE install.js 2>&1 | tail -2
+    cd "$ROOT_DIR"
+  fi
+fi
 
 # ── 3. WebGAL engine ──
 echo "[3/4] WebGAL engine..."
@@ -44,7 +54,7 @@ if [[ ! -f "$WEBGAL_DIR/packages/webgal/package.json" ]]; then
   if [[ "$(uname -s)" == "Darwin" ]]; then
     ditto -x -k "$TMP_ZIP" "$ROOT_DIR/vendor/"
   else
-    yes n 2>/dev/null | unzip -qo "$TMP_ZIP" -d "$ROOT_DIR/vendor/" 2>/dev/null || true
+    unzip -qo "$TMP_ZIP" -d "$ROOT_DIR/vendor/" 2>/dev/null || true
   fi
   rm -f "$TMP_ZIP"
   for d in "$ROOT_DIR"/vendor/webgal-mygo-*; do
@@ -55,7 +65,8 @@ if [[ -f "$WEBGAL_DIR/packages/webgal/package.json" ]]; then
   echo "       Engine: OK"
   if [[ ! -d "$WEBGAL_DIR/node_modules" ]]; then
     echo "       Installing WebGAL deps..."
-    cd "$WEBGAL_DIR" && $NPM install 2>&1 | tail -2
+    cd "$WEBGAL_DIR" && $NPM install --legacy-peer-deps 2>&1 | tail -2
+    cd "$ROOT_DIR"
   fi
 else
   echo "       Engine not found. Skipping."
