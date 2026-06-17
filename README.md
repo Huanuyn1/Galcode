@@ -40,11 +40,10 @@ cd Galcode
 ## 快速开始
 
 ```cmd
-node --version
-npm install --include=optional
+install.bat
 copy .env.example .env
 notepad .env                  # 填入 API key
-node .\bin\galcode.js yolo --offline --duration 30 --record --out outputs\first-test
+.\galcode yolo --offline --duration 30 --record --out outputs\first-test
 start outputs\first-test\final.mp4
 ```
 
@@ -60,13 +59,13 @@ OPENAI_API_KEY=sk-your-key-here
 ## 用法
 
 ```cmd
-node .\bin\galcode.js                                      # 交互模式
-node .\bin\galcode.js yolo --record                        # AI 自由发挥 + 录视频
-node .\bin\galcode.js make --theme "灯和爱音雨夜和解" --record
-node .\bin\galcode.js yolo --offline --record              # 离线 demo
+.\galcode                                      # 交互模式
+.\galcode yolo --record                        # AI 自由发挥 + 录视频
+.\galcode make --theme "灯和爱音雨夜和解" --record
+.\galcode yolo --offline --record              # 离线 demo
 ```
 
-交互模式命令：直接输入中文想法，或 `/brainstorm` `/yolo` `/make` `/quit`。如果运行过 `npm link`，也可以直接使用 `galcode` 短命令。
+交互模式命令：直接输入中文想法，或 `/brainstorm` `/yolo` `/make` `/quit`。
 
 ## 录制
 
@@ -95,6 +94,8 @@ outputs\<作品名>\
 ## 项目结构
 
 ```
+galcode.bat               Windows 启动器
+install.bat               Windows 安装器
 bin\galcode.js            CLI 入口
 src\galcode.js            CLI 主逻辑
 src\electron-recorder.cjs Electron 录制器

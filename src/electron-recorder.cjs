@@ -158,8 +158,9 @@ async function main() {
     fs.closeSync(fd);
   }
 
-  const wallSec = Math.round((Date.now() - captureStart) / 1000);
-  console.error(`Galcode electron captured ${frameCount} frames in ${wallSec}s (target ${fps} fps)`);
+  const elapsedSec = Math.max(0.001, (Date.now() - captureStart) / 1000);
+  const inputFps = frameCount / elapsedSec;
+  console.error(`Galcode electron captured ${frameCount} frames in ${elapsedSec.toFixed(2)}s (${inputFps.toFixed(2)} fps, target ${fps} fps)`);
 
   const rawSize = fs.statSync(rawFile).size;
   console.error(`Galcode electron raw file: ${rawSize} bytes (expected ${frameCount * expectedFrameBytes})`);
@@ -168,7 +169,7 @@ async function main() {
   // capturePage gives us the true screen content at each tick — no more
   // minterpolate needed. Simple fps filter for uniform output.
   const { execSync } = require("node:child_process");
-  const ffmpegCmd = `${ffmpeg} -y -f rawvideo -pix_fmt bgra -s ${width}x${height} -framerate ${fps} -i ${rawFile} -r ${fps} -pix_fmt yuv420p -c:v libx264 -preset ultrafast -crf 23 ${out}`;
+  const ffmpegCmd = `${ffmpeg} -y -f rawvideo -pix_fmt bgra -s ${width}x${height} -framerate ${inputFps.toFixed(6)} -i ${rawFile} -r ${fps} -pix_fmt yuv420p -c:v libx264 -preset ultrafast -crf 23 ${out}`;
   console.error(`Galcode electron ffmpeg: ${ffmpegCmd}`);
   try {
     execSync(ffmpegCmd, { stdio: "inherit", timeout: Math.max(120000, duration * 5000) });
@@ -192,6 +193,7 @@ async function main() {
 
 async function autoplay(win) {
   const wc = win.webContents;
+  await ensureLanguageSelected(win);
   await click(wc, Math.floor(width / 2), Math.floor(height / 2));
   await waitForSelector(win, ".Title_button, [class*=\"Title_button\"]", 30000);
   await sleep(500);
@@ -222,6 +224,22 @@ async function autoplay(win) {
     })()
   `, true).catch(() => {});
   console.error('Galcode electron: auto-advance timer started');
+}
+
+async function ensureLanguageSelected(win) {
+  const selected = await win.webContents.executeJavaScript(`
+(() => {
+  const text = document.body?.innerText || '';
+  if (window.localStorage.getItem('lang')) return false;
+  window.localStorage.setItem('lang', '0');
+  if (/LANGUAGE SELECT/i.test(text)) window.location.reload();
+  return true;
+})()
+`, true).catch(() => false);
+  if (selected) {
+    console.error("Galcode electron: selected default WebGAL language");
+    await sleep(1500);
+  }
 }
 
 async function click(wc, x, y) {

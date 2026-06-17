@@ -251,8 +251,10 @@ AI environment:
   OPENAI_BASE_URL      Defaults to https://api.openai.com/v1.
 
 Recording:
-  Requires optional Playwright and ffmpeg. If no --url is provided, Galcode records
-  the generated fallback preview. If --url is provided, it records your WebGAL page.
+  Requires Electron and ffmpeg. If no --url is provided, Galcode starts the local
+  WebGAL preview for the generated project and records that page. If WebGAL cannot
+  start, recording fails with setup instructions instead of silently recording a
+  fallback page. Pass --allow-fallback-preview to record preview.html for debugging.
   Default recording FPS is 60. Use --fps <n> to override.
   Recommended capture backend is --capture electron: cross-platform background
   Chromium offscreen rendering. --capture avfoundation is macOS-only visible
@@ -2234,12 +2236,26 @@ async function recordProject(projectDir, flags) {
   if (!url && !flags.previewOnly) {
     autoServer = await startWebGALPreview(projectDir, flags).catch((error) => {
       if (error.galcodeFatal) throw error;
-      console.warn(`Could not auto-start WebGAL preview: ${error.message}`);
-      return null;
+      if (flags.allowFallbackPreview) {
+        console.warn(`Could not auto-start WebGAL preview: ${error.message}`);
+        console.warn("Falling back to preview.html because --allow-fallback-preview was passed.");
+        return null;
+      }
+      throw new Error([
+        `Could not auto-start WebGAL preview: ${error.message}`,
+        "Run `install.bat` on Windows (or `./install.sh` on Unix) to install WebGAL dependencies,",
+        "then retry recording. For debugging only, pass --allow-fallback-preview."
+      ].join(" "));
     });
     if (autoServer) url = autoServer.url;
   }
-  if (!url) url = pathToFileUrl(path.join(projectDir, "preview.html"));
+  if (!url) {
+    if (flags.previewOnly || flags.allowFallbackPreview) {
+      url = pathToFileUrl(path.join(projectDir, "preview.html"));
+    } else {
+      throw new Error("No WebGAL URL is available for recording.");
+    }
+  }
   const size = flags.size || "1280x720";
 
   const hasFfmpeg = await commandExists("ffmpeg");
@@ -2536,7 +2552,7 @@ async function startWebGALPreview(projectDir, flags) {
     if (flags.installWebgalDeps) {
       await run("npm", ["install", "--legacy-peer-deps", "--include=dev"], { cwd: webgalWorkspaceRoot });
     } else {
-      throw new Error("WebGAL dependencies are not installed. Run `galcode record ... --install-webgal-deps` once, or use --preview-only.");
+      throw new Error("WebGAL dependencies are not installed. Run `install.bat` on Windows, `./install.sh` on Unix, or run `galcode record ... --install-webgal-deps` once.");
     }
   }
 
@@ -2560,7 +2576,12 @@ async function startWebGALPreview(projectDir, flags) {
   });
   child.on("error", () => {});
   const url = `http://127.0.0.1:${port}`;
-  await waitForUrl(url, Number(flags.webgalTimeout || 60000));
+  try {
+    await waitForUrl(url, Number(flags.webgalTimeout || 60000));
+  } catch (error) {
+    child.kill("SIGTERM");
+    throw error;
+  }
   console.log(`Auto-started WebGAL preview: ${url}`);
   return { child, url };
 }
