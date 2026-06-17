@@ -2,6 +2,8 @@
 
 AI 驱动的 WebGAL 二创 CLI。输入想法或让它自由发挥，Galcode 会根据本地 MyGO / Ave Mujica 素材生成剧情结构、编译 WebGAL 脚本、套用 Bang Dream 手游风格主题，并录制成视频。
 
+第一次使用建议先看：[小白看这里](docs/小白看这里.md)。
+
 ## 环境准备
 
 ### 1. 安装 Node.js（≥20）
@@ -17,7 +19,7 @@ npm --version
 
 用 winget（管理员 PowerShell）：
 ```powershell
-winget install ffmpeg
+winget install Gyan.FFmpeg
 ```
 
 或从 https://ffmpeg.org 下载，解压后将 `bin` 目录加入 PATH。
@@ -38,11 +40,12 @@ cd Galcode
 ## 快速开始
 
 ```cmd
-install.bat
+node --version
+npm install --include=optional
 copy .env.example .env
 notepad .env                  # 填入 API key
-galcode yolo --offline --duration 30 --record
-start outputs\*\final.mp4
+node .\bin\galcode.js yolo --offline --duration 30 --record --out outputs\first-test
+start outputs\first-test\final.mp4
 ```
 
 ## 配置 API
@@ -57,13 +60,13 @@ OPENAI_API_KEY=sk-your-key-here
 ## 用法
 
 ```cmd
-galcode                                      # 交互模式
-galcode yolo --record                        # AI 自由发挥 + 录视频
-galcode make --theme "灯和爱音雨夜和解" --record
-galcode yolo --offline --record              # 离线 demo
+node .\bin\galcode.js                                      # 交互模式
+node .\bin\galcode.js yolo --record                        # AI 自由发挥 + 录视频
+node .\bin\galcode.js make --theme "灯和爱音雨夜和解" --record
+node .\bin\galcode.js yolo --offline --record              # 离线 demo
 ```
 
-交互模式命令：直接输入中文想法，或 `/brainstorm` `/yolo` `/make` `/quit`。
+交互模式命令：直接输入中文想法，或 `/brainstorm` `/yolo` `/make` `/quit`。如果运行过 `npm link`，也可以直接使用 `galcode` 短命令。
 
 ## 录制
 
@@ -92,8 +95,7 @@ outputs\<作品名>\
 ## 项目结构
 
 ```
-galcode.bat               Windows 启动器
-install.bat               Windows 安装器
+bin\galcode.js            CLI 入口
 src\galcode.js            CLI 主逻辑
 src\electron-recorder.cjs Electron 录制器
 figure\                   Live2D 模型 + 背景 + BGM
