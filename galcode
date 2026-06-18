@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$ROOT_DIR"
+export PATH="$ROOT_DIR/tools/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 if [[ -x "$ROOT_DIR/tools/bin/node" ]]; then
-  export PATH="$ROOT_DIR/tools/bin:$PATH"
   NODE="$ROOT_DIR/tools/bin/node"
 elif command -v node >/dev/null 2>&1; then
   NODE="$(command -v node)"
@@ -11,6 +12,12 @@ else
   echo "Galcode needs Node.js >=20, but no Node runtime was found." >&2
   echo "Install Node.js, or restore the migrated tools/bin/node runtime." >&2
   exit 127
+fi
+
+NODE_MAJOR="$("$NODE" -e "process.stdout.write(process.versions.node.split('.')[0])")"
+if [[ "$NODE_MAJOR" -lt 20 ]]; then
+  echo "Galcode needs Node.js >=20, current version is $("$NODE" --version)." >&2
+  exit 1
 fi
 
 exec "$NODE" "$ROOT_DIR/bin/galcode.js" "$@"

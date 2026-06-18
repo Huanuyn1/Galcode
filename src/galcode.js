@@ -17,8 +17,10 @@ async function extractZip(zipPath, destDir) {
   if (isWindows) {
     await run("powershell", ["-NoProfile", "-Command",
       `Expand-Archive -Force -Path '${zipPath}' -DestinationPath '${destDir}'`]);
-  } else {
+  } else if (isMac) {
     await run("ditto", ["-x", "-k", zipPath, destDir]);
+  } else {
+    await run("unzip", ["-qo", zipPath, "-d", destDir]);
   }
 }
 
@@ -65,7 +67,8 @@ function assertElectronRuntimeComplete(electronPath) {
 }
 
 function resolveToolsBin() {
-  return (isMac && fssync.existsSync(path.resolve("tools/bin"))) ? path.resolve("tools/bin") : "";
+  const toolsBin = path.resolve("tools/bin");
+  return fssync.existsSync(toolsBin) ? toolsBin : "";
 }
 
 const DEFAULT_ENGINE_REPO = "https://github.com/OpenWebGAL/WebGAL.git";
@@ -2753,7 +2756,7 @@ async function recordWithElectronOffscreen(url, { width, height, duration, fps, 
     env: {
       ...process.env,
       ELECTRON_ENABLE_LOGGING: flags.electronLogs ? "1" : process.env.ELECTRON_ENABLE_LOGGING || "",
-      PATH: `${resolveToolsBin()}${path.delimiter}${process.env.PATH || ""}`
+      PATH: [resolveToolsBin(), process.env.PATH || ""].filter(Boolean).join(path.delimiter)
     }
   });
 }

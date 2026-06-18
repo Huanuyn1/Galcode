@@ -1,106 +1,187 @@
-# Galcode — Windows
+# Galcode
 
-AI 驱动的 WebGAL 二创 CLI。输入想法或让它自由发挥，Galcode 会根据本地 MyGO / Ave Mujica 素材生成剧情结构、编译 WebGAL 脚本、套用 Bang Dream 手游风格主题，并录制成视频。
+AI 驱动的 WebGAL 二创 CLI。输入一句脑洞，Galcode 会根据本地 MyGO / Ave Mujica 素材生成剧情结构、编译 WebGAL 脚本、套用 Bang Dream 手游风格主题，并把 WebGAL 画面录制成视频。
 
-第一次使用建议先看：[小白看这里](docs/小白看这里.md)。
+`main` 分支现在是 Windows / macOS / Linux 通用版。第一次使用建议先看 Windows 新手手册：[小白看这里](docs/小白看这里.md)。
+
+## 一键开始
+
+### Windows
+
+```powershell
+git clone https://github.com/Huanuyn1/Galcode.git
+cd Galcode
+.\start.bat
+```
+
+### macOS
+
+```bash
+git clone https://github.com/Huanuyn1/Galcode.git
+cd Galcode
+chmod +x install.sh start.sh galcode
+./start.sh
+```
+
+### Linux
+
+```bash
+git clone https://github.com/Huanuyn1/Galcode.git
+cd Galcode
+chmod +x install.sh start.sh galcode
+./start.sh
+```
+
+`start.bat` / `start.sh` 会先自动安装 Galcode、Electron / Playwright、WebGAL 依赖，然后进入交互模式。首次运行需要联网；如果仓库里没有完整 WebGAL engine，安装器会自动下载补齐。
 
 ## 环境准备
 
-### 1. 安装 Node.js（≥20）
+必须安装：
 
-从 https://nodejs.org 下载 LTS 版，安装时勾选 **"Add to PATH"**。
+| 平台 | 依赖 |
+| --- | --- |
+| Windows 10/11 | Git、Node.js 20+、FFmpeg |
+| macOS | Node.js 20+、FFmpeg，推荐用 Homebrew |
+| Linux | Node.js 20+、FFmpeg、curl、unzip |
 
-```cmd
+常用安装命令：
+
+```powershell
+# Windows PowerShell
+winget install Git.Git OpenJS.NodeJS.LTS Gyan.FFmpeg
+```
+
+```bash
+# macOS
+brew install node ffmpeg
+```
+
+```bash
+# Ubuntu / Debian
+sudo apt update
+sudo apt install -y nodejs npm ffmpeg git curl unzip
+```
+
+检查：
+
+```bash
 node --version
 npm --version
-```
-
-### 2. 安装 FFmpeg
-
-用 winget（管理员 PowerShell）：
-```powershell
-winget install Gyan.FFmpeg
-```
-
-或从 https://ffmpeg.org 下载，解压后将 `bin` 目录加入 PATH。
-
-```cmd
 ffmpeg -version
 ```
 
-### 3. 克隆项目
+## 安装和自检
 
-```cmd
-git clone https://github.com/Huanuyn1/Galcode.git
-cd Galcode
+如果不想直接启动，也可以只安装依赖：
+
+```bash
+# Windows
+.\install.bat
+
+# macOS / Linux
+./install.sh
 ```
 
-> 默认 `main` 分支就是 Windows 版。
+自检：
 
-## 快速开始
-
-```cmd
-install.bat
-copy .env.example .env
-notepad .env                  # 填入 API key
-.\galcode yolo --offline --duration 30 --record --out outputs\first-test
-start outputs\first-test\final.mp4
+```bash
+npm run doctor
 ```
 
-## 配置 API
+## 配置 AI
 
-编辑 `.env`：
+交互向导：
+
+```bash
+# Windows
+.\galcode.bat configure
+
+# macOS / Linux
+./galcode configure
+```
+
+也可以手动编辑 `.env`：
+
 ```text
 OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_MODEL=gpt-4.1-mini
 OPENAI_API_KEY=sk-your-key-here
 ```
 
-## 用法
+## 常用命令
 
-```cmd
-.\galcode                                      # 交互模式
-.\galcode yolo --record                        # AI 自由发挥 + 录视频
-.\galcode make --theme "灯和爱音雨夜和解" --record
-.\galcode yolo --offline --record              # 离线 demo
+```bash
+# 交互讨论模式
+./galcode
+
+# AI 自由发挥并录视频
+./galcode yolo --record
+
+# 指定主题生成并录视频
+./galcode make --theme "灯和爱音雨夜和解" --record --duration 60
+
+# 离线 demo，不需要 API key
+./galcode yolo --offline --record --duration 30
 ```
 
-交互模式命令：直接输入中文想法，或 `/brainstorm` `/yolo` `/make` `/quit`。
+Windows PowerShell 把 `./galcode` 换成：
+
+```powershell
+.\galcode.bat
+```
 
 ## 录制
 
 | 参数 | 说明 |
-|------|------|
-| `--capture electron` | 推荐，Electron 后台渲染 |
-| `--capture screenshot` | 逐帧截图，调试用 |
-| `--fps 60` | 帧率 |
+| --- | --- |
 | `--record` | 生成后自动录制 |
+| `--capture electron` | 推荐，Electron 后台渲染 |
+| `--capture screenshot` | 逐帧截图，适合排错 |
+| `--fps 60` | 输出帧率 |
+| `--duration 60` | 目标时长 |
+
+如果没有 `--url`，Galcode 会自动启动本地 WebGAL 预览并录制真实 WebGAL 页面。WebGAL 启动失败时会直接报安装建议，不会偷偷录 fallback 页面。
 
 ## 输出
 
-```
-outputs\<作品名>\
+```text
+outputs/<作品名>/
 ├── story.json
-├── game\scene\start.txt      WebGAL 脚本
-├── game\figure\live2d\        Live2D 模型
-├── game\template\            Bang Dream UI
-└── final.mp4                 视频（带 BGM）
+├── asset-manifest.json
+├── game/scene/start.txt
+├── game/figure/live2d/
+├── game/template/
+└── final.mp4
 ```
 
-## 素材
+## 一键发行包
 
-`figure\` 含 MyGO / Ave Mujica 全员 Live2D 模型（每角色多套服装 + 共享表情动作）、45 张背景、1 首 BGM。放更多 MP3 到 `figure\bgm\` 后运行 `galcode index` 即可。
+生成当前平台包：
+
+```bash
+npm run package:current
+```
+
+生成通用包：
+
+```bash
+npm run package:release
+```
+
+产物会放在 `dist/`。发行包里包含 `start.bat`、`start.sh`、`install.bat`、`install.sh` 和项目素材；用户解压后运行对应平台的 `start` 脚本即可自动安装依赖并启动。首次运行同样需要联网，以便下载 npm 依赖和补齐 WebGAL engine。
 
 ## 项目结构
 
-```
-galcode.bat               Windows 启动器
-install.bat               Windows 安装器
-bin\galcode.js            CLI 入口
-src\galcode.js            CLI 主逻辑
-src\electron-recorder.cjs Electron 录制器
-figure\                   Live2D 模型 + 背景 + BGM
-vendor\                   WebGAL MyGO 引擎
+```text
+start.bat / start.sh       一键安装依赖并启动
+install.bat / install.sh   只安装依赖
+galcode.bat / galcode      平台启动器
+scripts/                   跨平台安装、启动、打包脚本
+bin/galcode.js             CLI 入口
+src/galcode.js             CLI 主逻辑
+src/electron-recorder.cjs  Electron 录制器
+figure/                    Live2D 模型 + 背景 + BGM
+vendor/                    WebGAL MyGO 引擎
 ```
 
 ## 许可证

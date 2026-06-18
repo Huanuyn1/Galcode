@@ -3,6 +3,11 @@ node_modules/
 .galcode/
 outputs/
 work/
+dist/
+*.log
+.DS_Store
+docs/.DS_Store
+figure/.DS_Store
 
 vendor/webgal-mygo/node_modules/
 vendor/webgal-mygo/packages/webgal/node_modules/

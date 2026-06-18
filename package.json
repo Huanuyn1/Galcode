@@ -9,7 +9,13 @@
   "scripts": {
     "galcode": "node ./bin/galcode.js",
     "check": "node ./bin/galcode.js --help",
-    "demo": "node ./bin/galcode.js yolo --offline --out outputs/demo"
+    "demo": "node ./bin/galcode.js yolo --offline --out outputs/demo",
+    "install:all": "node ./scripts/galcode-bootstrap.mjs install",
+    "start:app": "node ./scripts/galcode-bootstrap.mjs start",
+    "doctor": "node ./scripts/galcode-bootstrap.mjs doctor",
+    "package:release": "node ./scripts/package-release.mjs --target universal",
+    "package:current": "node ./scripts/package-release.mjs --target current",
+    "package:all": "node ./scripts/package-release.mjs --target all"
   },
   "engines": {
     "node": ">=20"
