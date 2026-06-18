@@ -9,6 +9,7 @@ const path = require("node:path");
 const { spawn } = require("node:child_process");
 
 const NODE_VERSION = process.env.GALCODE_NODE_VERSION || "v22.16.0";
+const PROJECT_ZIP_URL = process.env.GALCODE_PROJECT_ZIP || "https://github.com/Huanuyn1/Galcode/archive/refs/heads/main.zip";
 const rawArgs = process.argv.slice(2);
 const terminalChildIndex = rawArgs.indexOf("--terminal-child");
 const isTerminalChild = terminalChildIndex !== -1;
@@ -22,17 +23,15 @@ main().catch((error) => {
 });
 
 async function main() {
-  const rootDir = resolveRootDir();
+  let rootDir = resolveRootDir();
 
   if (!isTerminalChild && shouldOpenTerminal()) {
     await openInTerminal(rawArgs);
     return;
   }
 
+  rootDir = await ensureProjectRoot(rootDir);
   printHeader(rootDir);
-  if (!isProjectRoot(rootDir)) {
-    throw new Error(`Could not find Galcode project files next to the launcher: ${rootDir}`);
-  }
 
   const node = await ensureNode(rootDir);
   if (rawArgs.includes("--help") || rawArgs[0] === "help") {
@@ -99,6 +98,62 @@ function isProjectRoot(dir) {
   return fs.existsSync(path.join(dir, "package.json")) &&
     fs.existsSync(path.join(dir, "scripts", "galcode-bootstrap.mjs")) &&
     fs.existsSync(path.join(dir, "bin", "galcode.js"));
+}
+
+async function ensureProjectRoot(candidateRoot) {
+  if (isProjectRoot(candidateRoot)) return candidateRoot;
+
+  const installRoot = defaultProjectRoot();
+  if (isProjectRoot(installRoot)) return installRoot;
+
+  console.log("Galcode project files were not found next to this launcher.");
+  console.log(`Installing Galcode project files into: ${installRoot}`);
+  await installProjectFiles(installRoot);
+  return installRoot;
+}
+
+function defaultProjectRoot() {
+  if (process.env.GALCODE_HOME) return path.resolve(process.env.GALCODE_HOME);
+
+  if (process.platform === "win32") {
+    const base = process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local");
+    return path.join(base, "Galcode", "app");
+  }
+
+  if (process.platform === "darwin") {
+    return path.join(os.homedir(), "Library", "Application Support", "Galcode", "app");
+  }
+
+  const base = process.env.XDG_DATA_HOME || path.join(os.homedir(), ".local", "share");
+  return path.join(base, "galcode", "app");
+}
+
+async function installProjectFiles(installRoot) {
+  const parent = path.dirname(installRoot);
+  const archive = path.join(os.tmpdir(), `galcode-project-${Date.now()}.zip`);
+  const extractRoot = path.join(os.tmpdir(), `galcode-project-extract-${Date.now()}`);
+  await fsp.mkdir(parent, { recursive: true });
+  await fsp.mkdir(extractRoot, { recursive: true });
+
+  try {
+    await download(PROJECT_ZIP_URL, archive);
+    await extractZip(archive, extractRoot);
+    const entries = await fsp.readdir(extractRoot, { withFileTypes: true });
+    const extracted = entries.find((entry) => entry.isDirectory() && /^Galcode[-_]/i.test(entry.name));
+    if (!extracted) throw new Error("Downloaded Galcode archive did not contain a Galcode project folder.");
+
+    const extractedRoot = path.join(extractRoot, extracted.name);
+    if (!isProjectRoot(extractedRoot)) {
+      throw new Error("Downloaded Galcode archive is missing required project files.");
+    }
+
+    await fsp.rm(installRoot, { recursive: true, force: true });
+    await fsp.rename(extractedRoot, installRoot);
+    console.log("Galcode project files are ready.");
+  } finally {
+    await fsp.rm(archive, { force: true }).catch(() => {});
+    await fsp.rm(extractRoot, { recursive: true, force: true }).catch(() => {});
+  }
 }
 
 function shouldOpenTerminal() {
@@ -274,6 +329,31 @@ async function extractArchive(archive, destDir, ext) {
   }
 
   await run("tar", ["-xJf", archive, "-C", destDir], { stdio: "inherit" });
+}
+
+async function extractZip(archive, destDir) {
+  if (process.platform === "win32") {
+    await run("powershell", [
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-Command",
+      `Expand-Archive -Force -LiteralPath ${psQuote(archive)} -DestinationPath ${psQuote(destDir)}`
+    ], { stdio: "inherit" });
+    return;
+  }
+
+  if (process.platform === "darwin" && await commandExists("ditto")) {
+    await run("ditto", ["-x", "-k", archive, destDir], { stdio: "inherit" });
+    return;
+  }
+
+  if (await commandExists("unzip")) {
+    await run("unzip", ["-qo", archive, "-d", destDir], { stdio: "inherit" });
+    return;
+  }
+
+  throw new Error("Need unzip to extract Galcode project files on this platform.");
 }
 
 async function download(url, dest) {

@@ -45,7 +45,7 @@ chmod +x install.sh start.sh galcode
 | macOS Intel | `Galcode-macos-x64` |
 | Linux x64 | `Galcode-linux-x64` |
 
-双击 launcher 后，它会自动寻找 Node.js；如果找不到，会下载便携 Node 到 `tools/runtime/`，然后安装依赖并启动 Galcode。录制视频仍然需要 FFmpeg。
+双击 launcher 后，它会自动寻找项目文件；如果你只下载了一个 `Galcode-windows.exe`，它会先把 main 分支项目文件下载到用户应用目录，再自动准备 Node.js、安装依赖并启动 Galcode。录制视频仍然需要 FFmpeg。
 
 ## 环境准备
 
@@ -194,7 +194,7 @@ npm run package:current
 npm run package:release
 ```
 
-产物会放在 `dist/`。发行包里包含 `start.bat`、`start.sh`、`install.bat`、`install.sh` 和项目素材；如果先运行过 `npm run build:launcher:all`，还会包含 `Galcode-windows.exe`、`Galcode-macos-*` 和 `Galcode-linux-x64`。用户解压后双击对应平台的 Galcode launcher 即可启动。首次运行同样需要联网，以便下载便携 Node、npm 依赖和补齐 WebGAL engine。
+产物会放在 `dist/`。发行包里包含 `start.bat`、`start.sh`、`install.bat`、`install.sh` 和项目素材；如果先运行过 `npm run build:launcher:all`，还会包含 `Galcode-windows.exe`、`Galcode-macos-*` 和 `Galcode-linux-x64`。用户解压后双击对应平台的 Galcode launcher 即可启动。仓库的 `release/Galcode-windows.exe` 可以单文件分发，双击后会在线自举项目文件。首次运行需要联网，以便下载项目文件、便携 Node、npm 依赖和补齐 WebGAL engine。
 
 ## 项目结构
 
