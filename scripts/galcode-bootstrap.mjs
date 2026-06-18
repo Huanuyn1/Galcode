@@ -99,7 +99,7 @@ async function ensureRootDependencies(flags) {
   }
 
   console.log("[1/5] Installing Galcode dependencies...");
-  await runNpm(["install", "--include=optional"], ROOT_DIR);
+  await runNpm(["install", "--omit=dev", "--include=optional"], ROOT_DIR);
 }
 
 async function repairElectron(flags) {
@@ -155,17 +155,20 @@ async function ensureWebGALEngine(flags) {
 
   console.log("[3/5] Downloading WebGAL engine...");
   await fs.mkdir(path.join(ROOT_DIR, "vendor"), { recursive: true });
-  await fs.rm(WEBGAL_DIR, { recursive: true, force: true });
   const zipPath = path.join(os.tmpdir(), `galcode-webgal-${Date.now()}.zip`);
+  const extractRoot = path.join(os.tmpdir(), `galcode-webgal-extract-${Date.now()}`);
   try {
+    await fs.mkdir(extractRoot, { recursive: true });
     await downloadFile(WEBGAL_ZIP, zipPath);
-    await extractZip(zipPath, path.join(ROOT_DIR, "vendor"));
-    const entries = await fs.readdir(path.join(ROOT_DIR, "vendor"), { withFileTypes: true });
+    await extractZip(zipPath, extractRoot);
+    const entries = await fs.readdir(extractRoot, { withFileTypes: true });
     const extracted = entries.find((entry) => entry.isDirectory() && entry.name.startsWith("webgal-mygo-"));
     if (!extracted) throw new Error("Downloaded WebGAL archive did not contain a webgal-mygo directory.");
-    await fs.rename(path.join(ROOT_DIR, "vendor", extracted.name), WEBGAL_DIR);
+    await fs.rm(WEBGAL_DIR, { recursive: true, force: true });
+    await fs.rename(path.join(extractRoot, extracted.name), WEBGAL_DIR);
   } finally {
     await fs.rm(zipPath, { force: true }).catch(() => {});
+    await fs.rm(extractRoot, { recursive: true, force: true }).catch(() => {});
   }
 }
 

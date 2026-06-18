@@ -34,9 +34,22 @@ chmod +x install.sh start.sh galcode
 
 `start.bat` / `start.sh` 会先自动安装 Galcode、Electron / Playwright、WebGAL 依赖，然后进入交互模式。首次运行需要联网；如果仓库里没有完整 WebGAL engine，安装器会自动下载补齐。
 
+## 双击版
+
+开发者打包后，`dist/native/` 会出现可双击的原生 launcher：
+
+| 平台 | 产物 |
+| --- | --- |
+| Windows x64 | `Galcode.exe` |
+| macOS Apple Silicon | `Galcode.app` 或 `Galcode-macos-arm64` |
+| macOS Intel | `Galcode-macos-x64` |
+| Linux x64 | `Galcode-linux-x64` |
+
+双击 launcher 后，它会自动寻找 Node.js；如果找不到，会下载便携 Node 到 `tools/runtime/`，然后安装依赖并启动 Galcode。录制视频仍然需要 FFmpeg。
+
 ## 环境准备
 
-必须安装：
+如果直接从源码运行脚本，需要安装：
 
 | 平台 | 依赖 |
 | --- | --- |
@@ -156,6 +169,19 @@ outputs/<作品名>/
 
 ## 一键发行包
 
+编译当前平台双击 launcher：
+
+```bash
+npm install
+npm run build:launcher
+```
+
+编译三端 launcher：
+
+```bash
+npm run build:launcher:all
+```
+
 生成当前平台包：
 
 ```bash
@@ -168,7 +194,7 @@ npm run package:current
 npm run package:release
 ```
 
-产物会放在 `dist/`。发行包里包含 `start.bat`、`start.sh`、`install.bat`、`install.sh` 和项目素材；用户解压后运行对应平台的 `start` 脚本即可自动安装依赖并启动。首次运行同样需要联网，以便下载 npm 依赖和补齐 WebGAL engine。
+产物会放在 `dist/`。发行包里包含 `start.bat`、`start.sh`、`install.bat`、`install.sh` 和项目素材；如果先运行过 `npm run build:launcher:all`，还会包含 `Galcode-windows.exe`、`Galcode-macos-*` 和 `Galcode-linux-x64`。用户解压后双击对应平台的 Galcode launcher 即可启动。首次运行同样需要联网，以便下载便携 Node、npm 依赖和补齐 WebGAL engine。
 
 ## 项目结构
 
@@ -177,6 +203,7 @@ start.bat / start.sh       一键安装依赖并启动
 install.bat / install.sh   只安装依赖
 galcode.bat / galcode      平台启动器
 scripts/                   跨平台安装、启动、打包脚本
+scripts/native-launcher.cjs 原生双击 launcher 源码
 bin/galcode.js             CLI 入口
 src/galcode.js             CLI 主逻辑
 src/electron-recorder.cjs  Electron 录制器

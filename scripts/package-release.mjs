@@ -40,6 +40,7 @@ async function createPackage(platformTarget) {
     await copyEntry(entry, path.join(stageDir, path.basename(entry)));
   }
 
+  await copyNativeLaunchers(platformTarget, stageDir);
   await writeStartHere(platformTarget, stageDir);
   await archivePackage(platformTarget, stageDir, archive);
   const stat = await fs.stat(archive);
@@ -83,6 +84,33 @@ async function copyEntry(src, dest) {
   });
 }
 
+async function copyNativeLaunchers(platformTarget, stageDir) {
+  const nativeDir = path.join(DIST_DIR, "native");
+  if (!fssync.existsSync(nativeDir)) return;
+
+  const candidates = {
+    universal: [
+      ["Galcode.exe", "Galcode-windows.exe"],
+      ["Galcode-macos-arm64", "Galcode-macos-arm64"],
+      ["Galcode-macos-x64", "Galcode-macos-x64"],
+      ["Galcode-linux-x64", "Galcode-linux-x64"]
+    ],
+    windows: [["Galcode.exe", "Galcode.exe"]],
+    macos: [
+      ["Galcode-macos-arm64", "Galcode-macos-arm64"],
+      ["Galcode-macos-x64", "Galcode-macos-x64"]
+    ],
+    linux: [["Galcode-linux-x64", "Galcode"]]
+  }[platformTarget] || [];
+
+  for (const [sourceName, targetName] of candidates) {
+    const source = path.join(nativeDir, sourceName);
+    if (!fssync.existsSync(source)) continue;
+    await fs.copyFile(source, path.join(stageDir, targetName));
+    if (!targetName.endsWith(".exe")) await fs.chmod(path.join(stageDir, targetName), 0o755);
+  }
+}
+
 function shouldCopy(source) {
   const rel = path.relative(ROOT_DIR, source);
   if (!rel) return true;
@@ -107,20 +135,27 @@ async function writeStartHere(platformTarget, stageDir) {
       "Galcode quick start",
       "",
       "1. Install prerequisites:",
-      "   Windows: winget install Git.Git OpenJS.NodeJS.LTS Gyan.FFmpeg",
-      "   macOS:   brew install node ffmpeg",
-      "   Linux:   install Node.js 20+, ffmpeg, git, curl, and unzip with your package manager.",
+      "   Binary launchers can download portable Node.js automatically.",
+      "   Recording final.mp4 still needs FFmpeg:",
+      "   Windows: winget install Gyan.FFmpeg",
+      "   macOS:   brew install ffmpeg",
+      "   Linux:   install ffmpeg, curl, and unzip/tar with your package manager.",
       "",
-      "2. Run the one-click starter from this folder:",
+      "2. Double-click the matching launcher:",
+      "   Windows: Galcode-windows.exe",
+      "   macOS Apple Silicon: Galcode-macos-arm64, or use the separate Galcode.app package",
+      "   macOS Intel: Galcode-macos-x64",
+      "   Linux x64: ./Galcode-linux-x64",
+      "",
+      "   Fallback script launchers:",
       "   Windows: start.bat",
-      "   macOS:   chmod +x start.sh install.sh galcode && ./start.sh",
-      "   Linux:   chmod +x start.sh install.sh galcode && ./start.sh",
+      "   macOS/Linux: chmod +x start.sh install.sh galcode && ./start.sh",
       "",
       "3. To generate and record directly:",
       "   Windows: .\\galcode.bat make --theme \"灯和爱音雨夜和解\" --record --duration 60",
       "   macOS/Linux: ./galcode make --theme \"灯和爱音雨夜和解\" --record --duration 60",
       "",
-      "The first run needs internet access. It installs Galcode, Electron/Playwright, WebGAL dependencies, and downloads the WebGAL engine if needed.",
+      "The first run needs internet access. It installs Galcode, Electron/Playwright, WebGAL dependencies, downloads portable Node.js if needed, and downloads the WebGAL engine if needed.",
       ""
     ].join(os.EOL), "utf8");
     return;
@@ -130,20 +165,20 @@ async function writeStartHere(platformTarget, stageDir) {
     "",
     "1. Install prerequisites:",
     isWin
-      ? "   winget install Git.Git OpenJS.NodeJS.LTS Gyan.FFmpeg"
+      ? "   Binary launchers can download portable Node.js. For recording: winget install Gyan.FFmpeg"
       : platformTarget === "macos"
-      ? "   brew install node ffmpeg"
-      : "   Install Node.js 20+ and ffmpeg with your package manager.",
+      ? "   Binary launchers can download portable Node.js. For recording: brew install ffmpeg"
+      : "   Binary launchers can download portable Node.js. For recording, install ffmpeg, curl, and unzip/tar.",
     "",
     "2. Run the one-click starter from this folder:",
-    isWin ? "   start.bat" : "   ./start.sh",
+    isWin ? "   Double-click Galcode.exe, or run start.bat" : "   Double-click the Galcode binary, or run ./start.sh",
     "",
     "3. To generate and record directly:",
     isWin
       ? "   .\\galcode.bat make --theme \"灯和爱音雨夜和解\" --record --duration 60"
       : "   ./galcode make --theme \"灯和爱音雨夜和解\" --record --duration 60",
     "",
-    "The first run needs internet access. It installs Galcode, Electron/Playwright, WebGAL dependencies, and downloads the WebGAL engine if needed.",
+    "The first run needs internet access. It installs Galcode, Electron/Playwright, WebGAL dependencies, downloads portable Node.js if needed, and downloads the WebGAL engine if needed.",
     isUnix ? "If start.sh is not executable, run: chmod +x start.sh install.sh galcode" : ""
   ].filter(Boolean);
   await fs.writeFile(path.join(stageDir, "START_HERE.txt"), `${lines.join(os.EOL)}${os.EOL}`, "utf8");

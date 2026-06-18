@@ -13,6 +13,8 @@
     "install:all": "node ./scripts/galcode-bootstrap.mjs install",
     "start:app": "node ./scripts/galcode-bootstrap.mjs start",
     "doctor": "node ./scripts/galcode-bootstrap.mjs doctor",
+    "build:launcher": "node ./scripts/build-native-launcher.mjs --target current",
+    "build:launcher:all": "node ./scripts/build-native-launcher.mjs --target all",
     "package:release": "node ./scripts/package-release.mjs --target universal",
     "package:current": "node ./scripts/package-release.mjs --target current",
     "package:all": "node ./scripts/package-release.mjs --target all"
@@ -24,5 +26,8 @@
     "electron": "^37.10.3",
     "playwright": "^1.54.0"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@yao-pkg/pkg": "^6.20.0"
+  }
 }
