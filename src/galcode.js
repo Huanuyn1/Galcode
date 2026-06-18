@@ -100,61 +100,184 @@ const CHARACTER_CATALOG = [
   { key: "nyamu", displayName: "祐天寺若麦", aliases: ["祐天寺若麦", "祐天寺若麥", "若麦", "若麥", "喵梦", "喵夢", "Nyamu", "Yutenji Nyamu"] }
 ];
 
-const GALCODE_WRITER_SYSTEM_PROMPT = [
-  "You are Galcode Agent, an AI writer/director that creates non-commercial WebGAL fan works.",
-  "Your job is to produce a complete visual-novel plan as strict JSON that Galcode can compile into WebGAL script.",
-  "The compiler compiles these actions in order: changeBg, bgm, changeFigure, dialogue (type:line), narration, wait, end.",
-  "Do not invent unsupported WebGAL commands. Do not output raw WebGAL script unless explicitly asked.",
+// ═══ AI 提示词（软编码）══════════════════════════════════════
+// 内置中文默认值。运行时优先读取 .galcode/prompts/*.txt；
+// 首次运行自动写入默认文件，之后可直接编辑文件自定义提示词。
+// 删除对应的 .txt 文件即可恢复默认。
+const DEFAULT_WRITER_PROMPT = [
+  "你是 Galcode 引擎的 AI 编剧/导演，负责将创作讨论的结果编译为完整的 WebGAL 故事 JSON。",
   "",
-  "=== HOW FIGURES WORK ===",
-  "There are three fixed screen positions: left, center, right. ONE character per position.",
-  "Each character stays at ONE position for the ENTIRE scene. Never move a character to a different position mid-scene.",
+  "编译系统按以下顺序执行动作：changeBg（切换背景）→ bgm（背景音乐）→ changeFigure（立绘/角色）→ line（对话）→ narration（旁白）→ wait（停顿）→ end（结束）。",
+  "不要编造不存在的 WebGAL 命令，除非明确要求否则不要输出原始 .txt 脚本。",
   "",
-  "To INTRODUCE a character (first time they appear in a scene):",
-  "  { type:figure, character:'高松灯', assetId:'<tomori model id>', position:'center', motion:'idle01', expression:'default' }",
+  "=== 立绘/角色规则（极其重要，违反将导致画面异常）===",
   "",
-  "To CHANGE a character's emotion (same scene, same position):",
-  "  { type:figure, character:'高松灯', assetId:'<SAME tomori model id>', position:'center', motion:'cry01', expression:'cry01' }",
-  "  ← SAME assetId, SAME position; ONLY motion/expression differ.",
+  "【站位互斥】屏幕有三个固定站位：left（左）、center（中）、right（右）。",
+  "每个站位最多只能有一个角色。同一个角色只能占据一个站位。",
   "",
-  "KEY RULE: When a character's feeling shifts, output a figure action with the SAME assetId and position ",
-  "as their introduction, but with the new motion+expression. This is how WebGAL updates expressions.",
-  "DO NOT change a character's position mid-scene. DO NOT use a different assetId for the same character.",
-  "DO NOT output multiple figures at the same position simultaneously.",
+  "【角色唯一性】一个角色不能同时出现在两个站位上！",
+  "如果某角色已经在 left 位置，你不能再把它放到 center 或 right。",
+  "必须先移除再重新放置。",
   "",
-  "=== MOTIONS & EXPRESSIONS ===",
-  "Every figure MUST have a motion AND expression. Pick ONLY from the characterAssetGuide provided in the prompt.",
-  "Common patterns (emotion → motion= / expression=):",
-  "  neutral: idle01 / default     happy: smile01 / smile01     tense: serious01 / serious01",
-  "  upset:  angry01 / angry01     sad: cry01 / cry01           surprised: idle01 / surprised",
-  "  farewell: bye01 / default     thoughtful: nf01 / default",
-  "Match motion+expression to the emotion in the CURRENT line of dialogue.",
-  "Example arc for Tomori: introduce (idle01/default) → conflict (serious01/serious01) → breakdown (cry01/cry01) → reconcile (smile01/smile01)",
+  "【首次引入】该角色在本场景中第一次出现：",
+  "  { type:figure, character:'高松灯', assetId:'<tomori 模型 id>', position:'center', motion:'idle01', expression:'default' }",
   "",
-  "=== SCENE STRUCTURE ===",
-  "Each scene MUST: 1) Set bg (backgroundAssetId) 2) Set bgm (bgmAssetId) 3) Introduce characters 4) Dialogue.",
-  "Introduce all characters for a scene BEFORE their first line of dialogue in that scene.",
-  "Use different backgrounds across scenes. Never repeat the same bg in consecutive scenes.",
-  "Scenes: 3-5. Each scene: 4-8 lines of dialogue/narration. Use wait for dramatic pauses.",
+  "【切换表情】同一场景、同一位置，仅更新情绪：",
+  "  { type:figure, character:'高松灯', assetId:'<完全相同的 tomori 模型 id>', position:'center', motion:'cry01', expression:'cry01' }",
+  "  ← assetId 和 position 与引入时保持一致，仅修改 motion 和 expression。",
   "",
-  "=== Content Rules ===",
-  "BGM and backgrounds come from the asset manifest. Read names carefully (they're in Chinese).",
-  "Characters MUST use Live2D models from characterAssetGuide with matching characterKey.",
-  "Do not include copyrighted lyrics, sexual content, hateful content, graphic violence.",
+  "【移除角色】角色离场，或需要把位置腾给另一个角色：",
+  "  { type:figure, character:'none', position:'left' }",
+  "  ← 这会清除 left 站位上的任何角色。",
   "",
-  "=== BGM / MUSIC ===",
-  "You may optionally include a 'bgm' array in the story root to add background music to the final video.",
-  "Each BGM entry: { assetName:'filename.mp3', startSec:0, endSec:180, volume:0.25, fadeIn:2, fadeOut:3 }",
-  "- assetName: filename from the bgm list in the manifest summary",
-  "- startSec/endSec: when this track plays (seconds from story start). Use action durationSec to estimate.",
-  "- volume: 0.0-1.0 (0.25 is a good default for background music under dialogue)",
-  "- fadeIn/fadeOut: crossfade duration in seconds",
-  "Multiple bgm entries can overlap — they will be mixed together.",
-  "Example: [{ assetName:'s_Title.mp3', startSec:0, endSec:60, volume:0.25, fadeIn:2, fadeOut:3 }, ...]",
-  "If no bgm array is provided, no music will be added.",
+  "【置换角色】如果要让 B 取代 A 的位置，必须先移除 A 再放置 B：",
+  "  1) { type:figure, character:'none', position:'left' }     ← 先清除 A",
+  "  2) { type:figure, character:'千早爱音', assetId:'...', position:'left', motion:'idle01', expression:'default' }  ← 再放 B",
   "",
-  "Return JSON only, matching the provided schema."
+  "核心规则：",
+  "- 角色情绪变化 → figure 动作，assetId 和 position 不变，只改 motion/expression",
+  "- 绝对不要在同一站位上同时摆放两个角色",
+  "- 绝对不要让同一个角色出现在多个站位上",
+  "- 角色的站位在整个场景中应保持一致，不要中途换位（如需换位，先移除再重新引入）",
+  "",
+  "=== 动作与表情（motion / expression — 极其重要）===",
+  "每个 figure 动作必须同时带有 motion 和 expression。只能从角色资产指南（characterAssetGuide）里选择。",
+  "",
+  "【关键：禁止千篇一律的 idle01！】",
+  "idle01 只是静态站立动作。从头到尾全用 idle01 会让画面完全僵死，毫无表现力。",
+  "你必须根据每句台词的具体情绪，从可用动作列表中挑选最匹配的 motion。",
+  "",
+  "动作选择原则：",
+  "- 每 2-3 句台词至少有一次 motion 变化",
+  "- 情绪强烈的台词（哭泣、愤怒、大笑、惊讶）必须换对应的 motion",
+  "- idle01 仅限真正的日常平淡时刻，全场景最多用 1-2 次",
+  "- 一个 5-8 句台词的场景中，至少使用 3-4 种不同的 motion",
+  "",
+  "常见情绪 → motion / expression 对照（优先使用非 idle 的动作）：",
+  "  开心/微笑：smile01 / smile01      认真/紧张：serious01 / serious01     悲伤/哭泣：cry01 / cry01",
+  "  生气/不悦：angry01 / angry01      惊讶：idle01（仅此情况）/ surprised  道别：bye01 / default",
+  "  思考/迷茫：nf01 / default         日常/平静：idle01 / default（尽量少用）",
+  "",
+  "示例 — 正确的情绪驱动动作变化（灯，4 句台词）：",
+  "  引入：motion:'nf01'（迷茫不安地站着）",
+  "  被质问：motion:'serious01'（紧张回应）→ 与上一句不同！",
+  "  崩溃：motion:'cry01'（哭泣）→ 再次变化！",
+  "  和解：motion:'smile01'（微笑）→ 情绪弧线完整！",
+  "",
+  "同场景中切换情绪：发送 figure 动作，assetId + position 不变，仅修改 motion + expression。",
+  "",
+  "=== 角色服装（换装）===",
+  "每个角色在角色资产指南中有多套 Live2D 模型（preferredLive2D 数组），",
+  "每套对应不同服装，以 'costume' 字段标注（如「默认常服」「冬制服」「2023 休闲服」）。",
+  "",
+  "换装指南：",
+  "- 不同场景可根据情境选择不同服装（学校→制服，排练→常服，演出→活动服）",
+  "- 换装时使用目标服装的 assetId 即可（服装不同则 assetId 不同，这是允许的例外）",
+  "- 同一场景内不建议频繁换装，1 套服装即可",
+  "- 如果只有 1-2 个场景，选 1 套最合适的服装即可，不必强行换装",
+  "- 优先选择 motions 和 expressions 数量多的模型（表情资源更丰富）",
+  "",
+  "=== 场景结构 ===",
+  "每个场景必须包含：1) 设置背景(backgroundAssetId) 2) 设置 BGM(bgmAssetId) 3) 引入本场景所有角色 4) 对话/旁白。",
+  "角色的 figure 动作必须放在该角色在本场景的第一句台词之前。",
+  "不同场景使用不同背景，连续场景不要重复同一张。",
+  "场景数量：3-5 个。每个场景：4-8 句台词/旁白。适当使用 wait 制造戏剧停顿。",
+  "",
+  "=== 内容规则 ===",
+  "BGM 和背景从提供的素材清单中选取，仔细阅读文件名（多为中文）。",
+  "角色必须使用角色资产指南中 characterKey 匹配的 Live2D 模型，",
+  "并根据场景情境从 preferredLive2D 中挑选最合适的服装（costume 字段）。",
+  "禁止包含：受版权保护的歌词、成人内容、仇恨言论、血腥暴力描写。",
+  "",
+  "=== BGM / 背景音乐 ===",
+  "可在故事根级添加可选的 'bgm' 数组，用于后期视频混音。",
+  "每条 BGM 条目格式：{ assetName:'文件名.mp3', startSec:0, endSec:180, volume:0.25, fadeIn:2, fadeOut:3 }",
+  "- assetName：素材清单中 BGM 列表里的文件名（如 's_Title.mp3'），或 figure/bgm/ 目录下的实际文件名",
+  "- startSec/endSec：该曲目的起止时间（从故事开头算起）。可参考各动作的 durationSec 来估算时间线",
+  "- volume：0.0-1.0，背景音乐建议 0.2-0.3",
+  "- fadeIn/fadeOut：淡入淡出时长（秒）",
+  "多条 bgm 条目可以重叠，会自动混音。不提供 bgm 数组则不加音乐。",
+  "示例：[{ assetName:'s_Title.mp3', startSec:0, endSec:60, volume:0.25, fadeIn:2, fadeOut:3 }]",
+  "",
+  "仅输出 JSON，严格匹配给定的 schema，不要附带任何解释文字。"
 ].join("\n");
+
+const DEFAULT_DISCUSS_PROMPT = [
+  "你是 Galcode 引擎的 AI 创意导演，正在与用户协作开发一部非商业 MyGO/Ave Mujica WebGAL 同人短篇。",
+  "",
+  "你的职责：",
+  "- 通过自然、温暖的对话帮助用户打磨故事创意",
+  "- 用户提出一个主题或想法后，帮助其扩展为具体的视觉小说方案",
+  "- 根据素材清单建议使用哪些角色，以及她们之间可能产生怎样的互动",
+  "- 帮助设计 3-5 个场景的情绪弧线（每场景：背景 → 角色入场 → 对话）",
+  "- 根据素材清单中提供的背景和 BGM 清单建议合适的场景氛围",
+  "- 当有助于深化故事时，提出 1-2 个澄清性的问题",
+  "- 每次回应用心、有洞察力，控制在 2-4 段",
+  "- 当用户的想法已经足够清晰具体时，温柔地提醒用户输入 /generate 来生成最终脚本",
+  "- 当用户提到想用某首特定 BGM 或某个背景时，主动在素材清单中查找并确认是否可用",
+  "- 当讨论到场景氛围时，主动建议角色适合的服装（素材清单中每个角色有多套服装：常服、制服等）",
+  "",
+  "你需要掌握的技术知识：",
+  "- 角色在屏幕上有三个固定站位（左/中/右），同一场景中尽量保持不变",
+  "- 每个站位最多一个角色，同一个角色不能同时出现在多个站位",
+  "- 如需让 B 替换 A 的位置，必须先让 A 离场（remove figure），再让 B 入场",
+  "- 每场景需要：背景图 → BGM → 角色入场 → 对话/旁白",
+  "- 不同场景应使用不同背景（连续场景不能重复）",
+  "- 用户会给出目标总时长，请据此合理安排场景和对话的节奏",
+  "- 角色有多套服装模型（常服/制服/休闲服等），不同场景可换不同服装",
+  "- 角色通过 motion 来表达情绪变化（idle01/smile01/cry01/serious01/angry01/nf01 等），切勿整场只用 idle01",
+  "- 同一场景中角色可以在同一站位切换表情，但不能换位置",
+  "",
+  "内容边界：",
+  "- 禁止受版权保护的歌词、成人内容、仇恨言论、血腥暴力",
+  "- 角色性格应贴近原作风味",
+  "- 保持 MyGO/Ave Mujica 的基调：克制、含蓄、音乐作为隐喻",
+  "",
+  "用户使用中文与你交流。请用中文回应。",
+  "本阶段不要输出 JSON 或最终脚本 —— 只有当用户输入 /generate 时才进入生成阶段。"
+].join("\n");
+
+const DEFAULT_BRAINSTORM_PROMPT = [
+  "你是 Galcode 引擎的创意策划。为用户的主题构思 3 个非商业 MyGO/Ave Mujica WebGAL 同人短篇方向。",
+  "每个方向包含：标题(title)、一句话简介(pitch)、登场角色(characters)、情绪基调(tone)。",
+  "仅输出 JSON：{\"ideas\":[{\"title\":\"...\",\"pitch\":\"...\",\"characters\":\"...\",\"tone\":\"...\"}]}",
+  "禁止受版权保护的歌词、成人内容、仇恨言论、血腥暴力。"
+].join("\n");
+
+// ── 提示词加载系统 ──
+// 运行时优先读取 .galcode/prompts/*.txt，首次运行自动写入默认文件。
+let promptStore = null;
+
+async function loadPrompts(flags = {}) {
+  if (promptStore) return promptStore;
+
+  const promptDir = path.resolve(flags.promptDir || ".galcode/prompts");
+
+  async function load(name, defaultContent) {
+    const filePath = path.join(promptDir, `${name}.txt`);
+    try {
+      const content = await fs.readFile(filePath, "utf8");
+      return content.trim() || defaultContent;
+    } catch {
+      // 首次使用：写入默认提示词文件，方便用户发现和自定义
+      await ensureDir(promptDir);
+      await fs.writeFile(filePath, defaultContent, "utf8");
+      return defaultContent;
+    }
+  }
+
+  promptStore = {
+    writer: await load("writer", DEFAULT_WRITER_PROMPT),
+    discuss: await load("discuss", DEFAULT_DISCUSS_PROMPT),
+    brainstorm: await load("brainstorm", DEFAULT_BRAINSTORM_PROMPT)
+  };
+
+  return promptStore;
+}
+
+function getWriterPrompt()     { return promptStore?.writer     || DEFAULT_WRITER_PROMPT; }
+function getDiscussPrompt()    { return promptStore?.discuss    || DEFAULT_DISCUSS_PROMPT; }
+function getBrainstormPrompt() { return promptStore?.brainstorm || DEFAULT_BRAINSTORM_PROMPT; }
 
 export async function main(argv) {
   const { command, flags, positionals } = parseArgs(argv);
@@ -378,10 +501,11 @@ async function readLocalConfig(configPath) {
 async function agentCommand(flags = {}) {
   flags.assets = flags.assets || DEFAULT_ASSETS_DIR;
   flags.duration = flags.duration || 60;
+  await loadPrompts(flags);
   const rl = readline.createInterface({ input, output });
   try {
     console.log("Galcode Agent");
-    console.log("交互式 WebGAL 二创工作台。输入一句想法即可生成；输入 /help 查看命令。");
+    console.log("交互式 WebGAL 二创工作台。输入想法与 AI 讨论，用 /generate 生成成片。输入 /help 查看命令。");
     console.log("");
     printAgentHelp();
 
@@ -394,8 +518,12 @@ async function agentCommand(flags = {}) {
         return agentCommand(flags);
       }
       flags.offline = true;
-      console.log("已切换到离线 demo 模式。");
+      console.log("已切换到离线 demo 模式。使用 /yolo 快速生成离线 demo。");
     }
+
+    let discussionHistory = [];
+    let discussionBrief = null;
+    let discussionManifest = null;
 
     while (true) {
       const raw = await rl.question("\ngalcode> ");
@@ -413,6 +541,8 @@ async function agentCommand(flags = {}) {
         return agentCommand(flags);
       }
       if (line === "/yolo") {
+        discussionHistory = [];
+        discussionBrief = null;
         await runAgentCreation(rl, flags, yoloBrief(flags), "yolo");
         continue;
       }
@@ -423,11 +553,48 @@ async function agentCommand(flags = {}) {
       }
       if (line.startsWith("/make")) {
         const topic = line.replace(/^\/make\s*/i, "").trim() || await rl.question("想写什么主题？ ");
-        await runAgentCreation(rl, flags, await briefFromTopic(rl, flags, topic), "discuss");
+        discussionHistory = [];
+        discussionBrief = await briefFromTopic(rl, flags, topic);
+        if (flags.offline) {
+          console.log("离线模式下无法进行 AI 讨论。使用 /yolo 生成离线 demo。");
+          continue;
+        }
+        discussionManifest = discussionManifest || await loadManifestForRun(flags, "work/asset-manifest.json");
+        await startDiscussion(rl, flags, discussionBrief, discussionManifest, discussionHistory);
+        continue;
+      }
+      if (line === "/generate") {
+        if (!discussionHistory.length) {
+          console.log("还没有讨论内容。请先输入一个主题开始讨论，或使用 /yolo 直接生成。");
+          continue;
+        }
+        await generateFromDiscussion(rl, flags, discussionHistory, discussionBrief, discussionManifest);
+        discussionHistory = [];
+        discussionBrief = null;
         continue;
       }
 
-      await runAgentCreation(rl, flags, await briefFromTopic(rl, flags, line), "discuss");
+      // 直接输入文字 → 进入/继续创意讨论
+      if (flags.offline) {
+        console.log("离线模式下无法进行 AI 讨论。使用 /yolo 生成离线 demo。");
+        continue;
+      }
+
+      if (!discussionHistory.length) {
+        // 首条消息：以此为主题初始化讨论
+        discussionBrief = {
+          theme: line,
+          characters: "让 AI 从素材库中选择 2 到 4 位角色",
+          tone: "贴近 MyGO/Ave Mujica 的纠结、克制、和解感",
+          durationSec: Number(flags.duration || 180),
+          constraints: "非商业同人，不成人，不血腥，不批量投稿"
+        };
+        discussionManifest = discussionManifest || await loadManifestForRun(flags, "work/asset-manifest.json");
+        await startDiscussion(rl, flags, discussionBrief, discussionManifest, discussionHistory);
+      } else {
+        // 继续现有讨论
+        await continueDiscussion(rl, flags, line, discussionHistory);
+      }
     }
   } finally {
     rl.close();
@@ -437,14 +604,17 @@ async function agentCommand(flags = {}) {
 function printAgentHelp() {
   console.log([
     "命令：",
-    "  直接输入想法        例：灯和爱音雨夜排练前和解",
+    "  直接输入想法        与 AI 导演多轮讨论，打磨你的二创故事",
     "  /brainstorm 主题    先让 AI 给 3 个二创方向",
-    "  /make 主题          按指定主题生成 WebGAL 工程",
-    "  /yolo               不讨论，直接生成",
+    "  /make 主题          设定主题、角色、时长后开始讨论",
+    "  /generate           根据讨论内容生成 WebGAL 工程 + 录制视频",
+    "  /yolo               跳过讨论，直接生成（AI 自由发挥）",
     "  /config             重新配置 API key / 模型 / Base URL",
     "  /quit               退出",
     "",
-    "默认会生成 WebGAL 脚本；生成前会问是否录制 mp4。"
+    "工作流：输入想法 → AI 与你讨论打磨 → /generate 生成成片",
+    "讨论过程中 AI 导演不会直接输出脚本，而是陪你反复推敲剧情。",
+    "当你觉得方向清晰了，输入 /generate 即可调用管线生成成片。"
   ].join("\n"));
 }
 
@@ -488,11 +658,7 @@ async function printBrainstormIdeas(topic, flags) {
   const messages = [
     {
       role: "system",
-      content: [
-        "You are Galcode Agent. Brainstorm non-commercial MyGO/Ave Mujica WebGAL fan-work concepts.",
-        "Return JSON only: {\"ideas\":[{\"title\":\"...\",\"pitch\":\"...\",\"characters\":\"...\",\"tone\":\"...\"}]}",
-        "Do not include copyrighted lyrics, adult content, hateful content, or graphic violence."
-      ].join("\n")
+      content: getBrainstormPrompt()
     },
     {
       role: "user",
@@ -525,6 +691,123 @@ function fallbackBrainstormIdeas(topic) {
       tone: "有张力但不沉重"
     }
   ];
+}
+
+async function startDiscussion(rl, flags, brief, manifest, history) {
+  console.log("");
+  console.log(`主题：${brief.theme}`);
+  console.log(`角色偏好：${brief.characters || "让 AI 从素材库选择"}`);
+  console.log(`目标时长：${brief.durationSec || flags.duration || 180}s`);
+  if (brief.tone) console.log(`情绪/口味：${brief.tone}`);
+  console.log("");
+  console.log("── 开始讨论（输入 /generate 生成成片，输入其他内容继续讨论）──");
+  console.log("");
+
+  const firstMessage = JSON.stringify({
+    action: "discuss",
+    brief,
+    assetManifestSummary: summarizeManifest(manifest),
+    characterAssetGuide: buildCharacterAssetGuide(manifest)
+  }, null, 2);
+
+  history.push({ role: "user", content: firstMessage });
+
+  const response = await callOpenAI([
+    { role: "system", content: getDiscussPrompt() },
+    ...history
+  ], flags, { noJson: true, temperature: 0.8 });
+
+  history.push({ role: "assistant", content: response });
+  console.log(formatAIResponse(response));
+}
+
+async function continueDiscussion(rl, flags, message, history) {
+  console.log("");
+  history.push({ role: "user", content: message });
+
+  const response = await callOpenAI([
+    { role: "system", content: getDiscussPrompt() },
+    ...history
+  ], flags, { noJson: true, temperature: 0.8 });
+
+  history.push({ role: "assistant", content: response });
+  console.log(formatAIResponse(response));
+}
+
+async function generateFromDiscussion(rl, flags, history, brief, manifest) {
+  console.log("");
+  const shouldRecord = await rl.question("生成后录制 mp4 吗？[Y/n] ");
+  const outName = await rl.question("输出目录名？直接回车自动命名： ");
+  const outDir = path.resolve(outName.trim() || path.join("outputs", timestampSlug("discuss")));
+  const record = !/^n/i.test(shouldRecord.trim());
+
+  console.log("");
+  console.log("正在根据讨论内容生成剧本……");
+  console.log("");
+
+  // 将讨论记录整理为抄本，供生成阶段参考
+  const transcript = history
+    .filter((msg) => msg.role !== "system")
+    .map((msg) => {
+      const prefix = msg.role === "user" ? "用户" : "AI 导演";
+      return `${prefix}：${msg.content}`;
+    })
+    .join("\n\n---\n\n");
+
+  const genMessages = [
+    {
+      role: "system",
+      content: getWriterPrompt()
+    },
+    {
+      role: "user",
+      content: [
+        "以下是我和 AI 导演关于一部 MyGO/Ave Mujica 同人短篇的创作讨论。",
+        "请根据讨论中达成的共识，生成完整的 story JSON。",
+        "",
+        "=== 创作讨论 ===",
+        transcript,
+        "=== 讨论结束 ===",
+        "",
+        JSON.stringify({
+          action: "generate",
+          brief: brief || {},
+          assetManifestSummary: summarizeManifest(manifest || emptyManifest()),
+          characterAssetGuide: buildCharacterAssetGuide(manifest || emptyManifest()),
+          instruction: "Synthesize the discussion above into a complete WebGAL story JSON. Include all scenes, dialogue, figure actions, backgrounds, and BGM as discussed.",
+          schema: storySchema()
+        }, null, 2)
+      ].join("\n")
+    }
+  ];
+
+  const text = await callOpenAI(genMessages, flags);
+  const story = normalizeStory(parseJsonFromText(text), brief || {}, manifest || emptyManifest());
+
+  story.meta = {
+    ...(story.meta || {}),
+    mode: "discuss",
+    generatedAt: new Date().toISOString(),
+    conversationTurns: history.filter((msg) => msg.role === "user").length
+  };
+
+  const storyPath = path.join(outDir, "story.json");
+  await ensureDir(outDir);
+  await writeJson(storyPath, story);
+  await compileStory(story, manifest || emptyManifest(), outDir, flags);
+
+  if (record) {
+    await recordProject(outDir, flags);
+  }
+
+  console.log("");
+  console.log(`Galcode project ready: ${outDir}`);
+  return { outDir, storyPath };
+}
+
+function formatAIResponse(text) {
+  const separator = "─".repeat(60);
+  return `\n${separator}\n${text}\n${separator}\n`;
 }
 
 async function setupRepos(flags) {
@@ -654,9 +937,18 @@ async function makeCommand(flags) {
     throw new Error("--mode must be discuss or yolo");
   }
 
+  await loadPrompts(flags);
   const outDir = path.resolve(flags.out || path.join("outputs", timestampSlug(mode)));
   const brief = mode === "discuss" ? await askCreativeBrief(flags) : yoloBrief(flags);
   await createProjectFromBrief({ brief, mode, flags, outDir });
+
+  // 生成完成后自动进入交互讨论模式，方便迭代验证
+  console.log("");
+  console.log("── 进入迭代讨论模式 ──");
+  console.log(`刚才生成的成片在：${outDir}`);
+  console.log("可以继续讨论修改方向，输入 /generate 重新生成。");
+  flags.lastOutDir = outDir;
+  return agentCommand(flags);
 }
 
 async function createProjectFromBrief({ brief, mode, flags, outDir }) {
@@ -801,7 +1093,7 @@ async function generateStory({ brief, manifest, flags, mode }) {
   const messages = [
     {
       role: "system",
-      content: GALCODE_WRITER_SYSTEM_PROMPT
+      content: getWriterPrompt()
     },
     {
       role: "user",
@@ -819,7 +1111,7 @@ async function generateStory({ brief, manifest, flags, mode }) {
   return normalizeStory(parseJsonFromText(text), brief, manifest);
 }
 
-async function callOpenAI(messages, flags) {
+async function callOpenAI(messages, flags, options = {}) {
   const baseUrl = process.env.OPENAI_BASE_URL || "https://api.openai.com/v1";
   const model = flags.model || process.env.OPENAI_MODEL || "gpt-4.1-mini";
   const url = `${baseUrl.replace(/\/$/, "")}/chat/completions`;
@@ -834,8 +1126,9 @@ async function callOpenAI(messages, flags) {
       body: JSON.stringify({
         model,
         messages,
-        temperature: Number(process.env.OPENAI_TEMPERATURE || 1),
-        response_format: { type: "json_object" }
+        temperature: options.temperature ?? Number(process.env.OPENAI_TEMPERATURE || 1),
+        ...(options.noJson ? {} : { response_format: { type: "json_object" } }),
+        ...(options.noJson ? {} : { max_tokens: Number(process.env.OPENAI_MAX_TOKENS || 16384) })
       })
     });
   } catch (err) {
@@ -1066,6 +1359,32 @@ function characterDisplayName(key) {
   return CHARACTER_CATALOG.find((character) => character.key === key)?.displayName || key || "";
 }
 
+function costumeLabel(relativePath = "") {
+  // 从路径中提取服装信息，返回中文标签，帮助 LLM 区分不同模型
+  const lower = relativePath.toLowerCase();
+  if (/live_default|^default(\/|$)/i.test(lower)) return "默认常服";
+  if (/casual-2023/i.test(lower)) return "2023 休闲服";
+  if (/school_winter/i.test(lower)) return "冬制服";
+  if (/school_summer/i.test(lower)) return "夏制服";
+  if (/school(?!_)/i.test(lower)) return "校服";
+  if (/birthday/i.test(lower)) return "生日服";
+  if (/dream_festival/i.test(lower)) return "梦祭服";
+  if (/collabo/i.test(lower)) return "联动服";
+  if (/arbeit|打工/i.test(lower)) return "打工服";
+  if (/furisode|振袖/i.test(lower)) return "振袖";
+  if (/sumimi/i.test(lower)) return "sumimi 服";
+  if (/event/i.test(lower)) return "活动服";
+  // 回退：取路径中倒数第二段作为标识
+  const parts = relativePath.replaceAll("\\", "/").split("/").filter(Boolean);
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const part = parts[i].toLowerCase();
+    if (!CHARACTER_CATALOG.some((c) => c.key === part) && part !== "mygo" && part !== "figure" && part !== "mujica" && !part.endsWith(".json")) {
+      return part.replace(/[_-]/g, " ");
+    }
+  }
+  return "未知";
+}
+
 function inferAssetCharacterKey(asset) {
   return asset?.characterKey
     || inferLive2DCharacterKey(asset?.relativePath || "")
@@ -1086,10 +1405,12 @@ function buildCharacterAssetGuide(manifest) {
           displayName: character.displayName,
           name: asset.name,
           relativePath: asset.relativePath,
+          costume: costumeLabel(asset.relativePath),          // 中文服装标签
+          costumeDir: path.dirname(asset.relativePath).split(path.sep).pop() || "",  // 原始目录名
           defaultMotion: asset.defaultMotion,
           defaultExpression: asset.defaultExpression,
-          motions: filterShortNames(asset.motions || [], character.key).slice(0, 8),
-          expressions: filterShortNames(asset.expressions || [], character.key).slice(0, 8)
+          motions: filterShortNames(asset.motions || [], character.key).slice(0, 10),
+          expressions: filterShortNames(asset.expressions || [], character.key).slice(0, 10)
         }));
       return {
         characterKey: character.key,
@@ -1506,33 +1827,61 @@ function summarizeManifest(manifest) {
       id: asset.id,
       name: asset.name,
       fileName: asset.fileName,
+      relativePath: asset.relativePath,
       characterHint: asset.characterHint,
+      tags: asset.tags
+    }));
+
+  // BGM 列表：显示全部文件，LLM 可根据文件名判断氛围
+  const bgmAll = manifest.assets
+    .filter((asset) => asset.kind === "bgm")
+    .map((asset) => ({
+      id: asset.id,
+      fileName: asset.fileName,
+      name: asset.name,
+      relativePath: asset.relativePath
+    }));
+
+  // 背景列表：显示全部 + 路径层级便于 LLM 分类
+  const backgroundsAll = manifest.assets
+    .filter((asset) => asset.kind === "background")
+    .map((asset) => ({
+      id: asset.id,
+      fileName: asset.fileName,
+      name: asset.name,
+      relativePath: asset.relativePath
+    }));
+
+  const live2dAll = manifest.assets
+    .filter((asset) => asset.kind === "live2d")
+    .map((asset) => ({
+      id: asset.id,
+      name: asset.name,
+      fileName: asset.fileName,
+      characterHint: asset.characterHint,
+      characterKey: inferAssetCharacterKey(asset),
+      relativePath: asset.relativePath,
+      version: asset.live2dVersion,
+      isCompositePart: Boolean(asset.isCompositePart),
+      motions: (asset.motions || []).slice(0, 16),
+      expressions: (asset.expressions || []).slice(0, 16),
       tags: asset.tags
     }));
 
   return {
     counts: manifest.counts,
-    backgrounds: byKind("background", 40),
-    figures: byKind("figure", 60),
-    live2d: manifest.assets
-      .filter((asset) => asset.kind === "live2d")
-      .slice(0, 40)
-      .map((asset) => ({
-        id: asset.id,
-        name: asset.name,
-        fileName: asset.fileName,
-        characterHint: asset.characterHint,
-        characterKey: inferAssetCharacterKey(asset),
-        relativePath: asset.relativePath,
-        version: asset.live2dVersion,
-        isCompositePart: Boolean(asset.isCompositePart),
-        motions: (asset.motions || []).slice(0, 12),
-        expressions: (asset.expressions || []).slice(0, 12),
-        tags: asset.tags
-      })),
+    // 可用背景一览（全部）
+    backgrounds: backgroundsAll,
+    // 可用立绘（固定图，非 Live2D）
+    figures: byKind("figure", 200),
+    // 可用 Live2D 模型（全部可播放的，含动作/表情列表）
+    live2d: live2dAll,
+    // 角色 —— 模型对应表
     characterGuide: buildCharacterAssetGuide(manifest),
-    bgm: byKind("bgm", 30),
-    video: byKind("video", 20)
+    // 可用背景音乐（全部，LLM 根据文件名判断风格和适用场景）
+    bgm: bgmAll,
+    // 可用视频素材
+    video: byKind("video", 200)
   };
 }
 
@@ -1671,11 +2020,12 @@ async function compileStory(story, manifest, outDir, flags) {
   }
 
   sceneText.push("bgm:none -enter=2000;");
+  sceneText.push("wait:3000;");
   sceneText.push("end;");
 
   await fs.writeFile(path.join(gameDir, "scene", "start.txt"), `${sceneText.join("\n")}\n`, "utf8");
 
-  // Calculate timeline: cumulative seconds for each action
+  // 计算实际时间线（累计各动作的 durationSec）
   let clock = 0;
   const timeline = [];
   for (const scene of story.scenes || []) {
@@ -1685,10 +2035,9 @@ async function compileStory(story, manifest, outDir, flags) {
       clock += Math.max(0, dur);
     }
   }
-  if (story.bgm && story.bgm.length > 0) {
-    story._timeline = timeline;
-    story._totalDurationSec = clock;
-  }
+  // 始终保存真实时间线时长，供录制和 BGM 混音使用
+  story._timeline = timeline;
+  story._totalDurationSec = clock + 15; // 留 15 秒缓冲（end 动画 + WebGAL 过渡）
 
   // Resolve and copy BGM assets so they're available for post-processing
   if (story.bgm) {
@@ -1726,6 +2075,11 @@ async function compileStory(story, manifest, outDir, flags) {
 
 async function compileAction(action, assetMap, gameDir, copied) {
   if (action.type === "figure") {
+    // 移除角色：character 或 assetId 为 "none"
+    if (!action.character || action.character === "none" || action.assetId === "none") {
+      const pos = positionFlag(action.position);
+      return `changeFigure:none${pos ? " " + pos : ""} -next;`.replace(/  +/g, " ");
+    }
     const asset = assetMap.get(action.assetId);
     const name = asset?.kind === "live2d"
       ? await copyLive2DForWebGAL(asset, gameDir, copied)
@@ -2229,7 +2583,10 @@ async function mixBGM(projectDir, videoOut, flags = {}) {
 }
 
 async function recordProject(projectDir, flags) {
-  const duration = Number(flags.duration || flags.durationSec || await readStoryDuration(projectDir) || 180);
+  // 优先取编译时计算的真实时间线（_totalDurationSec），
+  // 仅当 story.json 不存在时才回退到 CLI 参数或默认值。
+  const storyDuration = await readStoryDuration(projectDir);
+  const duration = Number(storyDuration || flags.duration || flags.durationSec || 180);
   const out = path.resolve(flags.videoOut || path.join(projectDir, "final.mp4"));
   let autoServer = null;
   let url = flags.url || "";
@@ -2755,7 +3112,8 @@ async function readStoryDuration(projectDir) {
   const storyPath = path.join(projectDir, "story.json");
   if (!fssync.existsSync(storyPath)) return 0;
   const story = JSON.parse(await fs.readFile(storyPath, "utf8"));
-  return Number(story.durationSec || 0);
+  // 优先使用编译时计算的真实时间线时长，AI 声明的 durationSec 仅供参考
+  return Number(story._totalDurationSec || story.durationSec || 0);
 }
 
 async function commandExists(command) {
