@@ -26,6 +26,10 @@ try {
     if (argv[0] === "--") argv.shift();
     await install({ quick: true, skipCommandInstall: true });
     await run(process.execPath, [path.join(ROOT_DIR, "bin", "galcode.js"), ...argv], { cwd: ROOT_DIR });
+  } else if (command === "gui") {
+    if (argv[0] === "--") argv.shift();
+    await install({ quick: true, skipCommandInstall: true });
+    await launchGui(argv);
   } else if (command === "doctor") {
     await doctor();
   } else if (command === "help" || command === "--help") {
@@ -45,6 +49,7 @@ function printHelp() {
 Usage:
   node scripts/galcode-bootstrap.mjs install [--force]
   node scripts/galcode-bootstrap.mjs start [galcode args...]
+  node scripts/galcode-bootstrap.mjs gui
   node scripts/galcode-bootstrap.mjs doctor
 
 The installer is shared by Windows, macOS, and Linux. It installs npm
@@ -264,6 +269,43 @@ async function doctor() {
   }
 }
 
+async function launchGui(args = []) {
+  const electron = findElectronBinary();
+  if (!electron) {
+    throw new Error("Electron runtime was not found after install. Run `npm install --omit=dev --include=optional`, then retry.");
+  }
+  const mainScript = path.join(ROOT_DIR, "src", "gui", "main.cjs");
+  if (!fssync.existsSync(mainScript)) throw new Error(`GUI entry was not found: ${mainScript}`);
+
+  await run(electron, [mainScript, ...args], {
+    cwd: ROOT_DIR,
+    env: {
+      ...process.env,
+      GALCODE_ROOT: ROOT_DIR,
+      GALCODE_NODE: process.execPath,
+      PATH: buildPath()
+    }
+  });
+}
+
+function findElectronBinary() {
+  const candidates = isWindows
+    ? [
+      path.join(ROOT_DIR, "node_modules", "electron", "dist", "electron.exe"),
+      path.join(ROOT_DIR, "node_modules", ".bin", "electron.cmd")
+    ]
+    : isMac
+    ? [
+      path.join(ROOT_DIR, "node_modules", "electron", "dist", "Electron.app", "Contents", "MacOS", "Electron"),
+      path.join(ROOT_DIR, "node_modules", ".bin", "electron")
+    ]
+    : [
+      path.join(ROOT_DIR, "node_modules", "electron", "dist", "electron"),
+      path.join(ROOT_DIR, "node_modules", ".bin", "electron")
+    ];
+  return candidates.find((candidate) => fssync.existsSync(candidate)) || "";
+}
+
 function getNpmCommand() {
   const toolsNpm = path.join(ROOT_DIR, "tools", "bin", isWindows ? "npm.cmd" : "npm");
   if (fssync.existsSync(toolsNpm)) return toolsNpm;
@@ -276,6 +318,10 @@ async function runNpm(args, cwd) {
 
 async function commandExists(command) {
   return new Promise((resolve) => {
+    if (command.includes(path.sep)) {
+      resolve(fssync.existsSync(command));
+      return;
+    }
     const child = isWindows
       ? spawn("where", [command], { stdio: "ignore" })
       : spawn("sh", ["-c", `command -v ${shellQuote(command)} >/dev/null 2>&1`], { stdio: "ignore" });
@@ -286,11 +332,13 @@ async function commandExists(command) {
 
 function run(commandPath, args, options = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(commandPath, args, {
+    const commandSpec = normalizeSpawnCommand(commandPath, args);
+    const child = spawn(commandSpec.command, commandSpec.args, {
       cwd: options.cwd || ROOT_DIR,
       env: {
         ...process.env,
-        PATH: buildPath()
+        PATH: buildPath(),
+        ...(options.env || {})
       },
       stdio: options.stdio || "inherit",
       shell: false
@@ -301,6 +349,29 @@ function run(commandPath, args, options = {}) {
       else reject(new Error(`${commandPath} ${args.join(" ")} failed with ${signal || code}`));
     });
   });
+}
+
+function normalizeSpawnCommand(commandPath, args = []) {
+  if (!isWindows) return { command: commandPath, args };
+  const base = path.basename(commandPath).toLowerCase();
+  const usesCmd = base === "npm" ||
+    base === "npm.cmd" ||
+    base === "npx" ||
+    base === "npx.cmd" ||
+    base.endsWith(".cmd") ||
+    base.endsWith(".bat");
+  if (!usesCmd) return { command: commandPath, args };
+
+  const commandLine = [commandPath, ...args].map(quoteWindowsArg).join(" ");
+  return {
+    command: process.env.ComSpec || "cmd.exe",
+    args: ["/d", "/s", "/c", commandLine]
+  };
+}
+
+function quoteWindowsArg(value) {
+  const text = String(value);
+  return `"${text.replace(/"/g, '\\"')}"`;
 }
 
 function buildPath() {

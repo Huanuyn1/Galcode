@@ -2929,7 +2929,8 @@ async function startWebGALPreview(projectDir, flags) {
   await copyDir(sourceGameDir, publicGameDir);
   await ensureLive2DRuntime(webgalDir, sourceGameDir, flags);
   const port = Number(flags.port || await findOpenPort(3000));
-  const child = spawn("npm", ["run", "dev", "--", "--host", "127.0.0.1", "--port", String(port)], {
+  const npmDev = normalizeSpawnCommand(npmCommand(), ["run", "dev", "--", "--host", "127.0.0.1", "--port", String(port)]);
+  const child = spawn(npmDev.command, npmDev.args, {
     cwd: webgalDir,
     stdio: flags.webgalLogs ? "inherit" : "ignore",
     env: { ...process.env, BROWSER: "none" }
@@ -3130,13 +3131,38 @@ async function commandExists(command) {
 function run(command, args, options = {}) {
   return new Promise((resolve, reject) => {
     console.log(`$ ${command} ${args.join(" ")}`);
-    const child = spawn(command, args, { stdio: "inherit", ...options });
+    const commandSpec = normalizeSpawnCommand(command, args);
+    const child = spawn(commandSpec.command, commandSpec.args, { stdio: "inherit", ...options });
     child.on("error", reject);
     child.on("exit", (code) => {
       if (code === 0) resolve();
       else reject(new Error(`${command} exited with ${code}`));
     });
   });
+}
+
+function npmCommand() {
+  return isWindows ? "npm.cmd" : "npm";
+}
+
+function normalizeSpawnCommand(command, args = []) {
+  if (!isWindows) return { command, args };
+  const base = path.basename(command).toLowerCase();
+  const usesCmd = base === "npm" ||
+    base === "npm.cmd" ||
+    base === "npx" ||
+    base === "npx.cmd" ||
+    base.endsWith(".cmd") ||
+    base.endsWith(".bat");
+  if (!usesCmd) return { command, args };
+  return {
+    command: process.env.ComSpec || "cmd.exe",
+    args: ["/d", "/s", "/c", [command, ...args].map(quoteWindowsArg).join(" ")]
+  };
+}
+
+function quoteWindowsArg(value) {
+  return `"${String(value).replace(/"/g, '\\"')}"`;
 }
 
 function collectOutput(command, args, options = {}) {

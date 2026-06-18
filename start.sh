@@ -15,4 +15,4 @@ else
   exit 127
 fi
 
-exec "$NODE" "$ROOT_DIR/scripts/galcode-bootstrap.mjs" start "$@"
+exec "$NODE" "$ROOT_DIR/scripts/galcode-bootstrap.mjs" gui "$@"

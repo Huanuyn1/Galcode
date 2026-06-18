@@ -17,5 +17,5 @@ if exist "%ROOT_DIR%\tools\bin\node.exe" (
   set "NODE=node"
 )
 
-"%NODE%" "%ROOT_DIR%\scripts\galcode-bootstrap.mjs" start %*
+"%NODE%" "%ROOT_DIR%\scripts\galcode-bootstrap.mjs" gui %*
 exit /b %ERRORLEVEL%

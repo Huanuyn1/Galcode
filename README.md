@@ -32,7 +32,7 @@ chmod +x install.sh start.sh galcode
 ./start.sh
 ```
 
-`start.bat` / `start.sh` 会先自动安装 Galcode、Electron / Playwright、WebGAL 依赖，然后进入交互模式。首次运行需要联网；如果仓库里没有完整 WebGAL engine，安装器会自动下载补齐。
+`start.bat` / `start.sh` 会先自动安装 Galcode、Electron / Playwright、WebGAL 依赖，然后打开图形界面。首次运行需要联网；如果仓库里没有完整 WebGAL engine，安装器会自动下载补齐。
 
 ## 双击版
 
@@ -45,7 +45,7 @@ chmod +x install.sh start.sh galcode
 | macOS Intel | `Galcode-macos-x64` |
 | Linux x64 | `Galcode-linux-x64` |
 
-双击 launcher 后，它会自动寻找项目文件；如果你只下载了一个 `Galcode-windows.exe`，它会先把 main 分支项目文件下载到用户应用目录，再自动准备 Node.js、安装依赖并启动 Galcode。录制视频仍然需要 FFmpeg。
+双击 launcher 后，它会自动寻找项目文件；如果你只下载了一个 `Galcode-windows.exe`，它会先把 main 分支项目文件下载到用户应用目录，再自动准备 Node.js、安装依赖并打开 Galcode GUI。录制视频仍然需要 FFmpeg。需要命令行模式时可运行 `Galcode-windows.exe --cli`。
 
 ## 环境准备
 
@@ -124,7 +124,10 @@ OPENAI_API_KEY=sk-your-key-here
 ## 常用命令
 
 ```bash
-# 交互讨论模式
+# 打开图形界面
+npm run gui
+
+# 命令行交互讨论模式
 ./galcode
 
 # AI 自由发挥并录视频

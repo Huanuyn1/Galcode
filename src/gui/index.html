@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Galcode</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <aside class="sidebar">
+        <div>
+          <h1>Galcode</h1>
+          <p id="rootPath" class="muted"></p>
+        </div>
+        <nav>
+          <button class="nav-button active" data-view="create">创作</button>
+          <button class="nav-button" data-view="setup">配置</button>
+          <button class="nav-button" data-view="logs">日志</button>
+        </nav>
+        <div class="sidebar-actions">
+          <button id="doctorBtn" class="secondary">自检</button>
+          <button id="installBtn" class="secondary">修复依赖</button>
+          <button id="openOutputsBtn" class="secondary">打开输出</button>
+        </div>
+      </aside>
+
+      <section class="workspace">
+        <section id="create" class="view active">
+          <div class="toolbar">
+            <div>
+              <h2>生成 WebGAL 视频</h2>
+            </div>
+            <span id="statusBadge" class="badge">待命</span>
+          </div>
+
+          <label class="field">
+            <span>主题</span>
+            <textarea id="themeInput" rows="5" placeholder="例如：灯和爱音在雨夜排练前和解"></textarea>
+          </label>
+
+          <div class="grid">
+            <label class="field">
+              <span>时长（秒）</span>
+              <input id="durationInput" type="number" min="10" max="600" step="5" value="60">
+            </label>
+            <label class="field">
+              <span>输出目录</span>
+              <input id="outInput" type="text" placeholder="outputs/gui-test">
+            </label>
+          </div>
+
+          <div class="switch-row">
+            <label><input id="recordInput" type="checkbox" checked> 录制 final.mp4</label>
+          </div>
+
+          <div class="action-row">
+            <button id="generateBtn" class="primary">生成</button>
+            <button id="offlineBtn" class="secondary">离线测试</button>
+            <button id="stopBtn" class="danger" disabled>停止</button>
+          </div>
+        </section>
+
+        <section id="setup" class="view">
+          <div class="toolbar">
+            <div>
+              <h2>AI 配置</h2>
+            </div>
+          </div>
+
+          <div class="grid">
+            <label class="field">
+              <span>Base URL</span>
+              <input id="baseUrlInput" type="text">
+            </label>
+            <label class="field">
+              <span>模型</span>
+              <input id="modelInput" type="text">
+            </label>
+          </div>
+
+          <label class="field">
+            <span>API key</span>
+            <input id="apiKeyInput" type="password" placeholder="已有 key 时可留空">
+          </label>
+
+          <button id="saveConfigBtn" class="primary">保存配置</button>
+        </section>
+
+        <section id="logs" class="view">
+          <div class="toolbar">
+            <div>
+              <h2>运行日志</h2>
+            </div>
+            <button id="clearLogBtn" class="secondary">清空</button>
+          </div>
+          <pre id="logBox" class="log-box"></pre>
+        </section>
+      </section>
+    </main>
+    <script src="./renderer.js"></script>
+  </body>
+</html>

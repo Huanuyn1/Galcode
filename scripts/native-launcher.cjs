@@ -49,7 +49,11 @@ async function main() {
   const bootstrap = path.join(rootDir, "scripts", "galcode-bootstrap.mjs");
   if (!fs.existsSync(bootstrap)) throw new Error(`Missing bootstrap script: ${bootstrap}`);
 
-  await run(node.exe, [bootstrap, "start", ...rawArgs], {
+  const cliMode = rawArgs[0] === "--cli";
+  if (cliMode) rawArgs.shift();
+  const bootstrapCommand = cliMode ? "start" : "gui";
+
+  await run(node.exe, [bootstrap, bootstrapCommand, ...rawArgs], {
     cwd: rootDir,
     env: {
       ...process.env,
@@ -398,7 +402,8 @@ async function commandExists(command) {
 
 function run(command, args, options = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
+    const commandSpec = normalizeSpawnCommand(command, args);
+    const child = spawn(commandSpec.command, commandSpec.args, {
       cwd: options.cwd || undefined,
       env: options.env || process.env,
       stdio: options.stdio || "inherit",
@@ -412,6 +417,27 @@ function run(command, args, options = {}) {
       else reject(new Error(`${command} ${args.join(" ")} failed with ${signal || code}`));
     });
   });
+}
+
+function normalizeSpawnCommand(command, args = []) {
+  if (process.platform !== "win32") return { command, args };
+  const base = path.basename(command).toLowerCase();
+  const usesCmd = base === "npm" ||
+    base === "npm.cmd" ||
+    base === "npx" ||
+    base === "npx.cmd" ||
+    base.endsWith(".cmd") ||
+    base.endsWith(".bat");
+  if (!usesCmd) return { command, args };
+
+  return {
+    command: process.env.ComSpec || "cmd.exe",
+    args: ["/d", "/s", "/c", [command, ...args].map(quoteWindowsArg).join(" ")]
+  };
+}
+
+function quoteWindowsArg(value) {
+  return `"${String(value).replace(/"/g, '\\"')}"`;
 }
 
 function collect(command, args) {
