@@ -15,9 +15,14 @@ const REQUIRED_PROJECT_FILES = [
   "package.json",
   path.join("scripts", "galcode-bootstrap.mjs"),
   path.join("bin", "galcode.js"),
+  path.join("src", "galcode.js"),
   path.join("src", "gui", "main.cjs"),
   path.join("src", "gui", "preload.cjs"),
   path.join("src", "gui", "index.html")
+];
+const REQUIRED_PROJECT_TEXT = [
+  [path.join("scripts", "galcode-bootstrap.mjs"), "getNpmInvocation"],
+  [path.join("src", "galcode.js"), "npmInvocation"]
 ];
 const PRESERVED_INSTALL_PATHS = [
   ".galcode",
@@ -124,7 +129,17 @@ function isProjectRoot(dir) {
 }
 
 function missingProjectFiles(dir) {
-  return REQUIRED_PROJECT_FILES.filter((file) => !fs.existsSync(path.join(dir, file)));
+  const missing = REQUIRED_PROJECT_FILES.filter((file) => !fs.existsSync(path.join(dir, file)));
+  for (const [file, marker] of REQUIRED_PROJECT_TEXT) {
+    const target = path.join(dir, file);
+    if (!fs.existsSync(target)) continue;
+    try {
+      if (!fs.readFileSync(target, "utf8").includes(marker)) missing.push(`${file} (outdated)`);
+    } catch {
+      missing.push(`${file} (unreadable)`);
+    }
+  }
+  return missing;
 }
 
 function looksLikeGalcodeProject(dir) {
