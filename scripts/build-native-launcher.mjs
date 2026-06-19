@@ -64,6 +64,9 @@ async function buildExecutable(spec) {
   console.log(`Building ${spec.target} -> ${path.relative(ROOT_DIR, output)}`);
   await run(pkgBin, [
     "--targets", spec.target,
+    "--no-bytecode",
+    "--public",
+    "--public-packages", "*",
     "--compress", "Brotli",
     "--output", output,
     path.join(ROOT_DIR, "scripts", "native-launcher.cjs")

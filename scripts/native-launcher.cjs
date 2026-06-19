@@ -6,6 +6,7 @@ const fsp = fs.promises;
 const https = require("node:https");
 const os = require("node:os");
 const path = require("node:path");
+const zlib = require("node:zlib");
 const { spawn, spawnSync } = require("node:child_process");
 
 const NODE_VERSION = process.env.GALCODE_NODE_VERSION || "v22.16.0";
@@ -182,15 +183,11 @@ async function installProjectFiles(installRoot) {
   try {
     await preserveExistingInstall(installRoot, preserveRoot);
     await download(PROJECT_ZIP_URL, archive);
+    console.log(`Project archive: ${await describeFile(archive)}`);
     await extractZip(archive, extractRoot);
-    const entries = await fsp.readdir(extractRoot, { withFileTypes: true });
-    const extracted = entries.find((entry) => entry.isDirectory() && /^Galcode[-_]/i.test(entry.name));
-    if (!extracted) throw new Error("Downloaded Galcode archive did not contain a Galcode project folder.");
-
-    const extractedRoot = path.join(extractRoot, extracted.name);
-    if (!isProjectRoot(extractedRoot)) {
-      throw new Error("Downloaded Galcode archive is missing required project files.");
-    }
+    console.log(`Project archive extracted: ${await describeDirectory(extractRoot)}`);
+    const extractedRoot = await findExtractedProjectRoot(extractRoot);
+    if (!extractedRoot) throw new Error(`Downloaded Galcode archive did not contain a usable project folder. Extracted entries: ${await describeDirectory(extractRoot)}`);
 
     await fsp.rm(installRoot, { recursive: true, force: true });
     await fsp.rename(extractedRoot, installRoot);
@@ -200,6 +197,56 @@ async function installProjectFiles(installRoot) {
     await fsp.rm(archive, { force: true }).catch(() => {});
     await fsp.rm(extractRoot, { recursive: true, force: true }).catch(() => {});
     await fsp.rm(preserveRoot, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+async function findExtractedProjectRoot(extractRoot) {
+  const queue = [{ dir: extractRoot, depth: 0 }];
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (isProjectRoot(current.dir)) return current.dir;
+    if (current.depth >= 3) continue;
+
+    let entries = [];
+    try {
+      entries = await fsp.readdir(current.dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      queue.push({ dir: path.join(current.dir, entry.name), depth: current.depth + 1 });
+    }
+  }
+  return "";
+}
+
+async function describeDirectory(dir) {
+  try {
+    const entries = await fsp.readdir(dir, { withFileTypes: true });
+    if (entries.length === 0) return "(empty)";
+    return entries
+      .slice(0, 20)
+      .map((entry) => `${entry.isDirectory() ? "[dir]" : "[file]"} ${entry.name}`)
+      .join(", ");
+  } catch (error) {
+    return `unable to read ${dir}: ${error.message}`;
+  }
+}
+
+async function describeFile(file) {
+  try {
+    const stat = await fsp.stat(file);
+    const fd = await fsp.open(file, "r");
+    try {
+      const header = Buffer.alloc(Math.min(8, stat.size));
+      await fd.read(header, 0, header.length, 0);
+      return `${stat.size} bytes, first bytes ${header.toString("hex") || "(none)"}`;
+    } finally {
+      await fd.close();
+    }
+  } catch (error) {
+    return `unable to read ${file}: ${error.message}`;
   }
 }
 
@@ -387,13 +434,7 @@ function npmCommandForBin(binDir) {
 
 async function extractArchive(archive, destDir, ext) {
   if (ext === "zip") {
-    await run("powershell", [
-      "-NoProfile",
-      "-ExecutionPolicy",
-      "Bypass",
-      "-Command",
-      `Expand-Archive -Force -LiteralPath ${psQuote(archive)} -DestinationPath ${psQuote(destDir)}`
-    ], { stdio: "inherit" });
+    await extractZip(archive, destDir);
     return;
   }
 
@@ -401,6 +442,10 @@ async function extractArchive(archive, destDir, ext) {
 }
 
 async function extractZip(archive, destDir) {
+  await extractZipWithNode(archive, destDir);
+  if ((await directoryHasEntries(destDir))) return;
+
+  console.warn(`Node zip extraction produced no files. Falling back to system extractor for ${archive}`);
   if (process.platform === "win32") {
     await run("powershell", [
       "-NoProfile",
@@ -426,12 +471,42 @@ async function extractZip(archive, destDir) {
 }
 
 async function download(url, dest) {
-  console.log(`Downloading: ${url}`);
+  const errors = [];
+  const methods = [
+    ["node:https", downloadWithNode],
+    ["curl", downloadWithCurl],
+    ["powershell", downloadWithPowerShell]
+  ];
+
+  for (const [name, method] of methods) {
+    try {
+      await fsp.rm(dest, { force: true }).catch(() => {});
+      console.log(`Downloading: ${url}`);
+      if (name !== "node:https") console.log(`Download fallback: ${name}`);
+      await method(url, dest);
+      await validateDownloadedFile(dest);
+      console.log(`Download ready: ${await describeFile(dest)}`);
+      return;
+    } catch (error) {
+      errors.push(`${name}: ${error.message}`);
+    }
+  }
+
+  throw new Error(`Download failed or produced an invalid archive. ${errors.join(" | ")}`);
+}
+
+async function downloadWithNode(url, dest, redirects = 0) {
+  if (redirects > 5) throw new Error("Too many redirects");
   await new Promise((resolve, reject) => {
-    const request = https.get(url, (response) => {
+    const request = https.get(url, {
+      headers: {
+        "User-Agent": "Galcode Launcher",
+        "Accept": "application/zip,application/octet-stream,*/*"
+      }
+    }, (response) => {
       if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
         response.resume();
-        download(new URL(response.headers.location, url).toString(), dest).then(resolve, reject);
+        downloadWithNode(new URL(response.headers.location, url).toString(), dest, redirects + 1).then(resolve, reject);
         return;
       }
       if (response.statusCode !== 200) {
@@ -441,11 +516,124 @@ async function download(url, dest) {
       }
       const file = fs.createWriteStream(dest);
       response.pipe(file);
-      file.on("finish", () => file.close(resolve));
-      file.on("error", reject);
+      file.on("finish", () => file.close((error) => error ? reject(error) : resolve()));
+      file.on("error", (error) => {
+        response.destroy();
+        reject(error);
+      });
     });
     request.on("error", reject);
+    request.setTimeout(60000, () => request.destroy(new Error("Download timed out")));
   });
+}
+
+async function downloadWithCurl(url, dest) {
+  const command = process.platform === "win32" ? "curl.exe" : "curl";
+  if (!(await commandExists(command))) throw new Error(`${command} not found`);
+  await run(command, ["-L", "--fail", "--retry", "3", "--connect-timeout", "30", "-o", dest, url], { stdio: "inherit" });
+}
+
+async function downloadWithPowerShell(url, dest) {
+  if (process.platform !== "win32") throw new Error("PowerShell fallback is Windows-only");
+  if (!(await commandExists("powershell"))) throw new Error("powershell not found");
+  await run("powershell", [
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-Command",
+    `[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing -Uri ${psQuote(url)} -OutFile ${psQuote(dest)}`
+  ], { stdio: "inherit" });
+}
+
+async function validateDownloadedFile(file) {
+  const stat = await fsp.stat(file).catch(() => null);
+  if (!stat || stat.size < 1024) throw new Error(`downloaded file is too small (${stat ? stat.size : 0} bytes)`);
+  if (path.extname(file).toLowerCase() !== ".zip") return;
+
+  const fd = await fsp.open(file, "r");
+  try {
+    const header = Buffer.alloc(4);
+    await fd.read(header, 0, 4, 0);
+    if (header.toString("latin1", 0, 2) !== "PK") {
+      throw new Error(`downloaded file is not a zip archive; first bytes: ${header.toString("hex")}`);
+    }
+  } finally {
+    await fd.close();
+  }
+}
+
+async function extractZipWithNode(archive, destDir) {
+  await fsp.mkdir(destDir, { recursive: true });
+  const zip = await fsp.readFile(archive);
+  const eocdOffset = findEndOfCentralDirectory(zip);
+  if (eocdOffset < 0) throw new Error(`Invalid zip archive: EOCD not found in ${archive}`);
+
+  const totalEntries = zip.readUInt16LE(eocdOffset + 10);
+  const centralDirectoryOffset = zip.readUInt32LE(eocdOffset + 16);
+  if (totalEntries === 0xffff) throw new Error("Zip64 archives are not supported by the built-in extractor.");
+
+  let offset = centralDirectoryOffset;
+  let extracted = 0;
+  const destRoot = path.resolve(destDir);
+
+  for (let i = 0; i < totalEntries; i += 1) {
+    if (zip.readUInt32LE(offset) !== 0x02014b50) throw new Error(`Invalid zip central directory at offset ${offset}`);
+
+    const flags = zip.readUInt16LE(offset + 8);
+    const method = zip.readUInt16LE(offset + 10);
+    const compressedSize = zip.readUInt32LE(offset + 20);
+    const fileNameLength = zip.readUInt16LE(offset + 28);
+    const extraLength = zip.readUInt16LE(offset + 30);
+    const commentLength = zip.readUInt16LE(offset + 32);
+    const localHeaderOffset = zip.readUInt32LE(offset + 42);
+    const fileName = zip
+      .subarray(offset + 46, offset + 46 + fileNameLength)
+      .toString((flags & 0x800) ? "utf8" : "utf8")
+      .replace(/\\/g, "/");
+
+    offset += 46 + fileNameLength + extraLength + commentLength;
+    if (!fileName || fileName.endsWith("/")) continue;
+
+    const target = path.resolve(destRoot, fileName);
+    if (target !== destRoot && !target.startsWith(`${destRoot}${path.sep}`)) {
+      throw new Error(`Unsafe zip entry path: ${fileName}`);
+    }
+
+    if (zip.readUInt32LE(localHeaderOffset) !== 0x04034b50) {
+      throw new Error(`Invalid zip local header for ${fileName}`);
+    }
+    const localNameLength = zip.readUInt16LE(localHeaderOffset + 26);
+    const localExtraLength = zip.readUInt16LE(localHeaderOffset + 28);
+    const dataOffset = localHeaderOffset + 30 + localNameLength + localExtraLength;
+    const compressed = zip.subarray(dataOffset, dataOffset + compressedSize);
+    let data;
+    if (method === 0) data = compressed;
+    else if (method === 8) data = zlib.inflateRawSync(compressed);
+    else throw new Error(`Unsupported zip compression method ${method} for ${fileName}`);
+
+    await fsp.mkdir(path.dirname(target), { recursive: true });
+    await fsp.writeFile(target, data);
+    extracted += 1;
+  }
+
+  console.log(`Node zip extractor wrote ${extracted} files.`);
+}
+
+function findEndOfCentralDirectory(zip) {
+  const min = Math.max(0, zip.length - 0xffff - 22);
+  for (let offset = zip.length - 22; offset >= min; offset -= 1) {
+    if (zip.readUInt32LE(offset) === 0x06054b50) return offset;
+  }
+  return -1;
+}
+
+async function directoryHasEntries(dir) {
+  try {
+    const entries = await fsp.readdir(dir);
+    return entries.length > 0;
+  } catch {
+    return false;
+  }
 }
 
 async function commandExists(command) {
