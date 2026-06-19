@@ -6,4 +6,4 @@
 
 如果 Windows 提示“未知发布者”，请选择“更多信息”再继续运行。
 
-如果双击后没有出现 GUI，请查看 `%LOCALAPPDATA%\Galcode\logs` 里的最新日志；新版启动器也会在失败时弹出错误提示。
+如果双击后没有出现 GUI，请先查看 exe 同目录的 `Galcode-launcher.log`；新版启动器失败时也会尝试自动用记事本打开日志。备用日志目录是 `%LOCALAPPDATA%\Galcode\logs`。

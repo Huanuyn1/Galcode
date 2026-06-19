@@ -26,11 +26,11 @@ try {
     await install(parseFlags(argv));
   } else if (command === "start") {
     if (argv[0] === "--") argv.shift();
-    await install({ quick: true, skipCommandInstall: true });
+    await ensureLaunchDependencies({ quick: true, skipCommandInstall: true });
     await run(process.execPath, [path.join(ROOT_DIR, "bin", "galcode.js"), ...argv], { cwd: ROOT_DIR });
   } else if (command === "gui") {
     if (argv[0] === "--") argv.shift();
-    await install({ quick: true, skipCommandInstall: true });
+    await ensureLaunchDependencies({ quick: true, skipCommandInstall: true });
     await launchGui(argv);
   } else if (command === "doctor") {
     await doctor();
@@ -82,6 +82,14 @@ async function install(flags = {}) {
   console.log(isWindows
     ? "Run: .\\galcode.bat --help"
     : "Run: ./galcode --help");
+}
+
+async function ensureLaunchDependencies(flags) {
+  if (process.env.GALCODE_SKIP_INSTALL === "1") {
+    console.log("Install: skipped by GALCODE_SKIP_INSTALL");
+    return;
+  }
+  await install(flags);
 }
 
 function printHeader(title) {
@@ -279,7 +287,7 @@ async function launchGui(args = []) {
   const mainScript = path.join(ROOT_DIR, "src", "gui", "main.cjs");
   if (!fssync.existsSync(mainScript)) throw new Error(`GUI entry was not found: ${mainScript}`);
 
-  await run(electron, [mainScript, ...args], {
+  await runGui(electron, [mainScript, ...args], {
     cwd: ROOT_DIR,
     env: {
       ...process.env,
@@ -287,6 +295,34 @@ async function launchGui(args = []) {
       GALCODE_NODE: process.execPath,
       PATH: buildPath()
     }
+  });
+}
+
+function runGui(commandPath, args, options = {}) {
+  const minUptimeMs = Number(process.env.GALCODE_GUI_MIN_UPTIME_MS || 3000);
+  const startedAt = Date.now();
+  return new Promise((resolve, reject) => {
+    const commandSpec = normalizeSpawnCommand(commandPath, args);
+    const child = spawn(commandSpec.command, commandSpec.args, {
+      cwd: options.cwd || ROOT_DIR,
+      env: {
+        ...process.env,
+        PATH: buildPath(),
+        ...(options.env || {})
+      },
+      stdio: options.stdio || "inherit",
+      shell: false
+    });
+    child.on("error", reject);
+    child.on("exit", (code, signal) => {
+      const uptimeMs = Date.now() - startedAt;
+      if (code === 0 && uptimeMs >= minUptimeMs) {
+        resolve();
+        return;
+      }
+      const reason = signal || code;
+      reject(new Error(`Galcode GUI exited during startup after ${uptimeMs}ms with ${reason}. Check the launcher log for details.`));
+    });
   });
 }
 

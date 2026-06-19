@@ -34,6 +34,7 @@ main().catch(async (error) => {
   console.error(`Galcode launcher failed: ${error.message}`);
   if (LAUNCH_LOG) console.error(`Log: ${LAUNCH_LOG}`);
   if (process.env.GALCODE_DEBUG === "1") console.error(error.stack);
+  openWindowsLog(LAUNCH_LOG);
   await showWindowsError(error, LAUNCH_LOG).catch(() => {});
   pauseIfWindows();
   process.exitCode = 1;
@@ -90,7 +91,7 @@ function printHeader(rootDir) {
 }
 
 function resolveRootDir() {
-  const exe = process.pkg ? process.execPath : __filename;
+  const exe = executablePath();
   const exeDir = path.dirname(exe);
 
   if (process.platform === "darwin") {
@@ -544,15 +545,23 @@ function psQuote(value) {
 }
 
 function initLaunchLog() {
-  try {
-    const dir = defaultLogDir();
-    fs.mkdirSync(dir, { recursive: true });
-    const file = path.join(dir, `launcher-${timestampForFile()}.log`);
-    fs.appendFileSync(file, `Galcode launcher log\n${new Date().toISOString()}\n\n`, "utf8");
-    return file;
-  } catch {
-    return "";
+  const candidates = process.platform === "win32"
+    ? [
+      path.join(path.dirname(executablePath()), "Galcode-launcher.log"),
+      path.join(defaultLogDir(), "Galcode-launcher.log")
+    ]
+    : [path.join(defaultLogDir(), `launcher-${timestampForFile()}.log`)];
+
+  for (const file of candidates) {
+    try {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.appendFileSync(file, `\nGalcode launcher log\n${new Date().toISOString()}\n\n`, "utf8");
+      return file;
+    } catch {
+      // Try the next candidate.
+    }
   }
+  return "";
 }
 
 function defaultLogDir() {
@@ -599,6 +608,24 @@ function timestampForFile() {
   return new Date().toISOString().replace(/[:.]/g, "-");
 }
 
+function executablePath() {
+  return process.pkg ? process.execPath : __filename;
+}
+
+function openWindowsLog(logFile) {
+  if (process.platform !== "win32" || !logFile || !fs.existsSync(logFile)) return;
+  try {
+    const child = spawn("notepad.exe", [logFile], {
+      detached: true,
+      stdio: "ignore",
+      windowsHide: false
+    });
+    child.unref();
+  } catch {
+    // Best effort only.
+  }
+}
+
 function showWindowsError(error, logFile) {
   if (process.platform !== "win32") return Promise.resolve();
   const message = [
@@ -607,6 +634,7 @@ function showWindowsError(error, logFile) {
     error.message,
     "",
     logFile ? `日志文件：${logFile}` : "",
+    logFile ? "日志已经尝试用记事本打开；也可以在 exe 同目录找 Galcode-launcher.log。" : "",
     "如果之前运行过旧版，请重新双击新版 Galcode-windows.exe，它会自动刷新本地项目缓存。"
   ].filter(Boolean).join("\n");
   const script = [
