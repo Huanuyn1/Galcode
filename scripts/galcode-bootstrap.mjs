@@ -263,10 +263,11 @@ async function installCommandShim() {
 async function doctor() {
   assertNodeVersion();
   printHeader("Galcode Doctor");
+  const npm = getNpmInvocation();
   const checks = [
     ["Root", ROOT_DIR, true],
     ["Node.js >=20", process.version, true],
-    ["npm", getNpmCommand(), await commandExists(getNpmCommand())],
+    ["npm", npm.label, await npmAvailable(npm)],
     ["ffmpeg", "ffmpeg", await commandExists("ffmpeg")],
     ["Galcode node_modules", "node_modules", fssync.existsSync(path.join(ROOT_DIR, "node_modules"))],
     ["Electron runtime", getExpectedElectronPath(), fssync.existsSync(getExpectedElectronPath())],
@@ -345,13 +346,45 @@ function findElectronBinary() {
 }
 
 function getNpmCommand() {
+  return getNpmInvocation().label;
+}
+
+function getNpmInvocation() {
+  const npmCli = findNpmCli();
+  if (npmCli) {
+    return {
+      command: process.execPath,
+      args: [npmCli],
+      label: `${process.execPath} ${npmCli}`
+    };
+  }
+
   const toolsNpm = path.join(ROOT_DIR, "tools", "bin", isWindows ? "npm.cmd" : "npm");
-  if (fssync.existsSync(toolsNpm)) return toolsNpm;
-  return isWindows ? "npm.cmd" : "npm";
+  const command = fssync.existsSync(toolsNpm) ? toolsNpm : isWindows ? "npm.cmd" : "npm";
+  return { command, args: [], label: command };
+}
+
+function findNpmCli() {
+  const exeDir = path.dirname(process.execPath);
+  const candidates = [
+    process.env.GALCODE_NPM_CLI || "",
+    path.join(exeDir, "node_modules", "npm", "bin", "npm-cli.js"),
+    path.join(exeDir, "..", "lib", "node_modules", "npm", "bin", "npm-cli.js"),
+    path.join(exeDir, "..", "libexec", "lib", "node_modules", "npm", "bin", "npm-cli.js"),
+    path.join(ROOT_DIR, "tools", "bin", "node_modules", "npm", "bin", "npm-cli.js"),
+    path.join(ROOT_DIR, "node_modules", "npm", "bin", "npm-cli.js")
+  ];
+  return candidates.find((candidate) => candidate && fssync.existsSync(candidate)) || "";
+}
+
+async function npmAvailable(npm) {
+  if (npm.args.length > 0) return fssync.existsSync(npm.args[0]);
+  return await commandExists(npm.command);
 }
 
 async function runNpm(args, cwd) {
-  await run(getNpmCommand(), args, { cwd });
+  const npm = getNpmInvocation();
+  await run(npm.command, [...npm.args, ...args], { cwd });
 }
 
 async function commandExists(command) {

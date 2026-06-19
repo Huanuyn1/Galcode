@@ -2929,7 +2929,8 @@ async function startWebGALPreview(projectDir, flags) {
   await copyDir(sourceGameDir, publicGameDir);
   await ensureLive2DRuntime(webgalDir, sourceGameDir, flags);
   const port = Number(flags.port || await findOpenPort(3000));
-  const npmDev = normalizeSpawnCommand(npmCommand(), ["run", "dev", "--", "--host", "127.0.0.1", "--port", String(port)]);
+  const npm = npmInvocation();
+  const npmDev = normalizeSpawnCommand(npm.command, [...npm.args, "run", "dev", "--", "--host", "127.0.0.1", "--port", String(port)]);
   const child = spawn(npmDev.command, npmDev.args, {
     cwd: webgalDir,
     stdio: flags.webgalLogs ? "inherit" : "ignore",
@@ -3142,7 +3143,25 @@ function run(command, args, options = {}) {
 }
 
 function npmCommand() {
-  return isWindows ? "npm.cmd" : "npm";
+  return npmInvocation().command;
+}
+
+function npmInvocation() {
+  const npmCli = findNpmCli();
+  if (npmCli) return { command: process.execPath, args: [npmCli] };
+  return { command: isWindows ? "npm.cmd" : "npm", args: [] };
+}
+
+function findNpmCli() {
+  const exeDir = path.dirname(process.execPath);
+  const candidates = [
+    process.env.GALCODE_NPM_CLI || "",
+    path.join(exeDir, "node_modules", "npm", "bin", "npm-cli.js"),
+    path.join(exeDir, "..", "lib", "node_modules", "npm", "bin", "npm-cli.js"),
+    path.join(exeDir, "..", "libexec", "lib", "node_modules", "npm", "bin", "npm-cli.js"),
+    path.join(process.cwd(), "node_modules", "npm", "bin", "npm-cli.js")
+  ];
+  return candidates.find((candidate) => candidate && fssync.existsSync(candidate)) || "";
 }
 
 function normalizeSpawnCommand(command, args = []) {
