@@ -13,8 +13,10 @@ const WEBGAL_ZIP = "https://github.com/boomwwww/webgal-mygo/archive/refs/heads/m
 const isWindows = process.platform === "win32";
 const isMac = process.platform === "darwin";
 const isLinux = process.platform === "linux";
+const LOG_FILE = process.env.GALCODE_LOG_FILE || "";
 
 process.chdir(ROOT_DIR);
+teeConsoleToLog(LOG_FILE);
 
 const argv = process.argv.slice(2);
 const command = argv[0] && !argv[0].startsWith("-") ? argv.shift() : "install";
@@ -444,4 +446,34 @@ function shellQuote(value) {
 
 function psQuote(value) {
   return `'${String(value).replace(/'/g, "''")}'`;
+}
+
+function teeConsoleToLog(file) {
+  if (!file) return;
+  for (const method of ["log", "warn", "error"]) {
+    const original = console[method].bind(console);
+    console[method] = (...args) => {
+      original(...args);
+      appendLogLine(file, args.map(formatLogArg).join(" "));
+    };
+  }
+}
+
+function appendLogLine(file, text) {
+  try {
+    fssync.mkdirSync(path.dirname(file), { recursive: true });
+    fssync.appendFileSync(file, `${text}\n`, "utf8");
+  } catch {
+    // Logging should never make bootstrap fail.
+  }
+}
+
+function formatLogArg(value) {
+  if (value instanceof Error) return value.stack || value.message;
+  if (typeof value === "string") return value;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
 }

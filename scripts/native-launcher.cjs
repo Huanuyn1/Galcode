@@ -6,18 +6,35 @@ const fsp = fs.promises;
 const https = require("node:https");
 const os = require("node:os");
 const path = require("node:path");
-const { spawn } = require("node:child_process");
+const { spawn, spawnSync } = require("node:child_process");
 
 const NODE_VERSION = process.env.GALCODE_NODE_VERSION || "v22.16.0";
 const PROJECT_ZIP_URL = process.env.GALCODE_PROJECT_ZIP || "https://github.com/Huanuyn1/Galcode/archive/refs/heads/main.zip";
+const REQUIRED_PROJECT_FILES = [
+  "package.json",
+  path.join("scripts", "galcode-bootstrap.mjs"),
+  path.join("bin", "galcode.js"),
+  path.join("src", "gui", "main.cjs"),
+  path.join("src", "gui", "preload.cjs"),
+  path.join("src", "gui", "index.html")
+];
+const PRESERVED_INSTALL_PATHS = [
+  ".galcode",
+  "outputs",
+  path.join("tools", "runtime")
+];
 const rawArgs = process.argv.slice(2);
 const terminalChildIndex = rawArgs.indexOf("--terminal-child");
 const isTerminalChild = terminalChildIndex !== -1;
 if (isTerminalChild) rawArgs.splice(terminalChildIndex, 1);
+const LAUNCH_LOG = initLaunchLog();
+teeConsoleToLog(LAUNCH_LOG);
 
-main().catch((error) => {
+main().catch(async (error) => {
   console.error(`Galcode launcher failed: ${error.message}`);
+  if (LAUNCH_LOG) console.error(`Log: ${LAUNCH_LOG}`);
   if (process.env.GALCODE_DEBUG === "1") console.error(error.stack);
+  await showWindowsError(error, LAUNCH_LOG).catch(() => {});
   pauseIfWindows();
   process.exitCode = 1;
 });
@@ -39,6 +56,7 @@ async function main() {
       cwd: rootDir,
       env: {
         ...process.env,
+        GALCODE_LOG_FILE: LAUNCH_LOG,
         PATH: [node.binDir, path.join(rootDir, "tools", "bin"), systemPath()].filter(Boolean).join(path.delimiter)
       },
       stdio: "inherit"
@@ -57,6 +75,7 @@ async function main() {
     cwd: rootDir,
     env: {
       ...process.env,
+      GALCODE_LOG_FILE: LAUNCH_LOG,
       PATH: [node.binDir, path.join(rootDir, "tools", "bin"), process.env.PATH || ""].filter(Boolean).join(path.delimiter)
     },
     stdio: "inherit"
@@ -99,21 +118,40 @@ function resolveRootDir() {
 }
 
 function isProjectRoot(dir) {
-  return fs.existsSync(path.join(dir, "package.json")) &&
-    fs.existsSync(path.join(dir, "scripts", "galcode-bootstrap.mjs")) &&
+  return missingProjectFiles(dir).length === 0;
+}
+
+function missingProjectFiles(dir) {
+  return REQUIRED_PROJECT_FILES.filter((file) => !fs.existsSync(path.join(dir, file)));
+}
+
+function looksLikeGalcodeProject(dir) {
+  return fs.existsSync(path.join(dir, "package.json")) ||
+    fs.existsSync(path.join(dir, "scripts", "galcode-bootstrap.mjs")) ||
     fs.existsSync(path.join(dir, "bin", "galcode.js"));
 }
 
 async function ensureProjectRoot(candidateRoot) {
   if (isProjectRoot(candidateRoot)) return candidateRoot;
+  reportOutdatedProject(candidateRoot);
 
   const installRoot = defaultProjectRoot();
   if (isProjectRoot(installRoot)) return installRoot;
+  reportOutdatedProject(installRoot);
 
   console.log("Galcode project files were not found next to this launcher.");
   console.log(`Installing Galcode project files into: ${installRoot}`);
   await installProjectFiles(installRoot);
   return installRoot;
+}
+
+function reportOutdatedProject(dir) {
+  if (!looksLikeGalcodeProject(dir)) return;
+  const missing = missingProjectFiles(dir);
+  if (missing.length === 0) return;
+  console.log(`Existing Galcode project is out of date: ${dir}`);
+  console.log(`Missing: ${missing.join(", ")}`);
+  console.log("Refreshing project files before launch...");
 }
 
 function defaultProjectRoot() {
@@ -136,10 +174,12 @@ async function installProjectFiles(installRoot) {
   const parent = path.dirname(installRoot);
   const archive = path.join(os.tmpdir(), `galcode-project-${Date.now()}.zip`);
   const extractRoot = path.join(os.tmpdir(), `galcode-project-extract-${Date.now()}`);
+  const preserveRoot = path.join(os.tmpdir(), `galcode-project-preserve-${Date.now()}`);
   await fsp.mkdir(parent, { recursive: true });
   await fsp.mkdir(extractRoot, { recursive: true });
 
   try {
+    await preserveExistingInstall(installRoot, preserveRoot);
     await download(PROJECT_ZIP_URL, archive);
     await extractZip(archive, extractRoot);
     const entries = await fsp.readdir(extractRoot, { withFileTypes: true });
@@ -153,10 +193,34 @@ async function installProjectFiles(installRoot) {
 
     await fsp.rm(installRoot, { recursive: true, force: true });
     await fsp.rename(extractedRoot, installRoot);
+    await restorePreservedInstall(preserveRoot, installRoot);
     console.log("Galcode project files are ready.");
   } finally {
     await fsp.rm(archive, { force: true }).catch(() => {});
     await fsp.rm(extractRoot, { recursive: true, force: true }).catch(() => {});
+    await fsp.rm(preserveRoot, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+async function preserveExistingInstall(installRoot, preserveRoot) {
+  if (!fs.existsSync(installRoot)) return;
+  for (const rel of PRESERVED_INSTALL_PATHS) {
+    const source = path.join(installRoot, rel);
+    if (!fs.existsSync(source)) continue;
+    const dest = path.join(preserveRoot, rel);
+    await fsp.mkdir(path.dirname(dest), { recursive: true });
+    await fsp.cp(source, dest, { recursive: true, force: true });
+  }
+}
+
+async function restorePreservedInstall(preserveRoot, installRoot) {
+  if (!fs.existsSync(preserveRoot)) return;
+  for (const rel of PRESERVED_INSTALL_PATHS) {
+    const source = path.join(preserveRoot, rel);
+    if (!fs.existsSync(source)) continue;
+    const dest = path.join(installRoot, rel);
+    await fsp.mkdir(path.dirname(dest), { recursive: true });
+    await fsp.cp(source, dest, { recursive: true, force: true });
   }
 }
 
@@ -479,13 +543,97 @@ function psQuote(value) {
   return `'${String(value).replace(/'/g, "''")}'`;
 }
 
+function initLaunchLog() {
+  try {
+    const dir = defaultLogDir();
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, `launcher-${timestampForFile()}.log`);
+    fs.appendFileSync(file, `Galcode launcher log\n${new Date().toISOString()}\n\n`, "utf8");
+    return file;
+  } catch {
+    return "";
+  }
+}
+
+function defaultLogDir() {
+  if (process.env.GALCODE_LOG_DIR) return path.resolve(process.env.GALCODE_LOG_DIR);
+  if (process.platform === "win32") {
+    const base = process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local");
+    return path.join(base, "Galcode", "logs");
+  }
+  if (process.platform === "darwin") return path.join(os.homedir(), "Library", "Logs", "Galcode");
+  const base = process.env.XDG_STATE_HOME || path.join(os.homedir(), ".local", "state");
+  return path.join(base, "galcode", "logs");
+}
+
+function teeConsoleToLog(file) {
+  if (!file) return;
+  for (const method of ["log", "warn", "error"]) {
+    const original = console[method].bind(console);
+    console[method] = (...args) => {
+      original(...args);
+      appendLogLine(file, args.map(formatLogArg).join(" "));
+    };
+  }
+}
+
+function appendLogLine(file, text) {
+  try {
+    fs.appendFileSync(file, `${text}\n`, "utf8");
+  } catch {
+    // Logging must never block launch.
+  }
+}
+
+function formatLogArg(value) {
+  if (value instanceof Error) return value.stack || value.message;
+  if (typeof value === "string") return value;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function timestampForFile() {
+  return new Date().toISOString().replace(/[:.]/g, "-");
+}
+
+function showWindowsError(error, logFile) {
+  if (process.platform !== "win32") return Promise.resolve();
+  const message = [
+    "Galcode 启动失败。",
+    "",
+    error.message,
+    "",
+    logFile ? `日志文件：${logFile}` : "",
+    "如果之前运行过旧版，请重新双击新版 Galcode-windows.exe，它会自动刷新本地项目缓存。"
+  ].filter(Boolean).join("\n");
+  const script = [
+    "Add-Type -AssemblyName PresentationFramework",
+    `[System.Windows.MessageBox]::Show(${psQuote(message)}, ${psQuote("Galcode 启动失败")}, 'OK', 'Error') | Out-Null`
+  ].join("; ");
+
+  return new Promise((resolve) => {
+    const child = spawn("powershell.exe", [
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-Command",
+      script
+    ], { stdio: "ignore", windowsHide: true });
+    child.on("error", () => resolve());
+    child.on("exit", () => resolve());
+  });
+}
+
 function pauseIfWindows() {
-  if (process.platform !== "win32" || process.stdin.isTTY === false) return;
+  if (process.platform !== "win32") return;
   console.error("");
   console.error("Press Enter to exit...");
   try {
     fs.readSync(0, Buffer.alloc(1), 0, 1);
   } catch {
-    // Best effort only.
+    spawnSync(process.env.ComSpec || "cmd.exe", ["/d", "/c", "pause"], { stdio: "inherit" });
   }
 }
