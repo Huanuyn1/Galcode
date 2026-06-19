@@ -22,6 +22,7 @@ const REQUIRED_PROJECT_FILES = [
 ];
 const REQUIRED_PROJECT_TEXT = [
   [path.join("scripts", "galcode-bootstrap.mjs"), "getNpmInvocation"],
+  [path.join("scripts", "galcode-bootstrap.mjs"), "extractZipWithNode"],
   [path.join("src", "galcode.js"), "npmInvocation"]
 ];
 const PRESERVED_INSTALL_PATHS = [

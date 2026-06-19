@@ -4,6 +4,7 @@ import fssync from "node:fs";
 import https from "node:https";
 import os from "node:os";
 import path from "node:path";
+import zlib from "node:zlib";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
@@ -175,16 +176,38 @@ async function ensureWebGALEngine(flags) {
   try {
     await fs.mkdir(extractRoot, { recursive: true });
     await downloadFile(WEBGAL_ZIP, zipPath);
+    console.log(`WebGAL archive: ${await describeFile(zipPath)}`);
     await extractZip(zipPath, extractRoot);
-    const entries = await fs.readdir(extractRoot, { withFileTypes: true });
-    const extracted = entries.find((entry) => entry.isDirectory() && entry.name.startsWith("webgal-mygo-"));
-    if (!extracted) throw new Error("Downloaded WebGAL archive did not contain a webgal-mygo directory.");
+    console.log(`WebGAL archive extracted: ${await describeDirectory(extractRoot)}`);
+    const extractedRoot = await findExtractedWebGALRoot(extractRoot);
+    if (!extractedRoot) throw new Error(`Downloaded WebGAL archive did not contain a usable WebGAL engine. Extracted entries: ${await describeDirectory(extractRoot)}`);
     await fs.rm(WEBGAL_DIR, { recursive: true, force: true });
-    await fs.rename(path.join(extractRoot, extracted.name), WEBGAL_DIR);
+    await fs.rename(extractedRoot, WEBGAL_DIR);
   } finally {
     await fs.rm(zipPath, { force: true }).catch(() => {});
     await fs.rm(extractRoot, { recursive: true, force: true }).catch(() => {});
   }
+}
+
+async function findExtractedWebGALRoot(extractRoot) {
+  const queue = [{ dir: extractRoot, depth: 0 }];
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (fssync.existsSync(path.join(current.dir, "packages", "webgal", "package.json"))) return current.dir;
+    if (current.depth >= 4) continue;
+
+    let entries = [];
+    try {
+      entries = await fs.readdir(current.dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      queue.push({ dir: path.join(current.dir, entry.name), depth: current.depth + 1 });
+    }
+  }
+  return "";
 }
 
 async function ensureWebGALDependencies(flags) {
@@ -456,11 +479,42 @@ function buildPath() {
 }
 
 async function downloadFile(url, dest) {
+  const errors = [];
+  const methods = [
+    ["node:https", downloadFileWithNode],
+    ["curl", downloadFileWithCurl],
+    ["powershell", downloadFileWithPowerShell]
+  ];
+
+  for (const [name, method] of methods) {
+    try {
+      await fs.rm(dest, { force: true }).catch(() => {});
+      console.log(`Downloading: ${url}`);
+      if (name !== "node:https") console.log(`Download fallback: ${name}`);
+      await method(url, dest);
+      await validateDownloadedFile(dest);
+      console.log(`Download ready: ${await describeFile(dest)}`);
+      return;
+    } catch (error) {
+      errors.push(`${name}: ${error.message}`);
+    }
+  }
+
+  throw new Error(`Download failed or produced an invalid archive. ${errors.join(" | ")}`);
+}
+
+async function downloadFileWithNode(url, dest, redirects = 0) {
+  if (redirects > 5) throw new Error("Too many redirects");
   await new Promise((resolve, reject) => {
-    const request = https.get(url, (response) => {
+    const request = https.get(url, {
+      headers: {
+        "User-Agent": "Galcode Bootstrap",
+        "Accept": "application/zip,application/octet-stream,*/*"
+      }
+    }, (response) => {
       if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
         response.resume();
-        downloadFile(new URL(response.headers.location, url).toString(), dest).then(resolve, reject);
+        downloadFileWithNode(new URL(response.headers.location, url).toString(), dest, redirects + 1).then(resolve, reject);
         return;
       }
       if (response.statusCode !== 200) {
@@ -470,14 +524,57 @@ async function downloadFile(url, dest) {
       }
       const file = fssync.createWriteStream(dest);
       response.pipe(file);
-      file.on("finish", () => file.close(resolve));
-      file.on("error", reject);
+      file.on("finish", () => file.close((error) => error ? reject(error) : resolve()));
+      file.on("error", (error) => {
+        response.destroy();
+        reject(error);
+      });
     });
     request.on("error", reject);
+    request.setTimeout(60000, () => request.destroy(new Error("Download timed out")));
   });
 }
 
+async function downloadFileWithCurl(url, dest) {
+  const command = isWindows ? "curl.exe" : "curl";
+  if (!(await commandExists(command))) throw new Error(`${command} not found`);
+  await run(command, ["-L", "--fail", "--retry", "3", "--connect-timeout", "30", "-o", dest, url]);
+}
+
+async function downloadFileWithPowerShell(url, dest) {
+  if (!isWindows) throw new Error("PowerShell fallback is Windows-only");
+  if (!(await commandExists("powershell"))) throw new Error("powershell not found");
+  await run("powershell", [
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-Command",
+    `[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing -Uri ${psQuote(url)} -OutFile ${psQuote(dest)}`
+  ]);
+}
+
+async function validateDownloadedFile(file) {
+  const stat = await fs.stat(file).catch(() => null);
+  if (!stat || stat.size < 1024) throw new Error(`downloaded file is too small (${stat ? stat.size : 0} bytes)`);
+  if (path.extname(file).toLowerCase() !== ".zip") return;
+
+  const handle = await fs.open(file, "r");
+  try {
+    const header = Buffer.alloc(4);
+    await handle.read(header, 0, 4, 0);
+    if (header.toString("latin1", 0, 2) !== "PK") {
+      throw new Error(`downloaded file is not a zip archive; first bytes: ${header.toString("hex")}`);
+    }
+  } finally {
+    await handle.close();
+  }
+}
+
 async function extractZip(zipPath, destDir) {
+  await extractZipWithNode(zipPath, destDir);
+  if (await directoryHasEntries(destDir)) return;
+
+  console.warn(`Node zip extraction produced no files. Falling back to system extractor for ${zipPath}`);
   if (isWindows) {
     await run("powershell", [
       "-NoProfile",
@@ -497,6 +594,109 @@ async function extractZip(zipPath, destDir) {
     return;
   }
   throw new Error("Need unzip to extract WebGAL on this platform.");
+}
+
+async function extractZipWithNode(zipPath, destDir) {
+  await fs.mkdir(destDir, { recursive: true });
+  const zip = await fs.readFile(zipPath);
+  const eocdOffset = findEndOfCentralDirectory(zip);
+  if (eocdOffset < 0) throw new Error(`Invalid zip archive: EOCD not found in ${zipPath}`);
+
+  const totalEntries = zip.readUInt16LE(eocdOffset + 10);
+  const centralDirectoryOffset = zip.readUInt32LE(eocdOffset + 16);
+  if (totalEntries === 0xffff) throw new Error("Zip64 archives are not supported by the built-in extractor.");
+
+  let offset = centralDirectoryOffset;
+  let extracted = 0;
+  const destRoot = path.resolve(destDir);
+
+  for (let i = 0; i < totalEntries; i += 1) {
+    if (zip.readUInt32LE(offset) !== 0x02014b50) throw new Error(`Invalid zip central directory at offset ${offset}`);
+
+    const flags = zip.readUInt16LE(offset + 8);
+    const method = zip.readUInt16LE(offset + 10);
+    const compressedSize = zip.readUInt32LE(offset + 20);
+    const fileNameLength = zip.readUInt16LE(offset + 28);
+    const extraLength = zip.readUInt16LE(offset + 30);
+    const commentLength = zip.readUInt16LE(offset + 32);
+    const localHeaderOffset = zip.readUInt32LE(offset + 42);
+    const fileName = zip
+      .subarray(offset + 46, offset + 46 + fileNameLength)
+      .toString((flags & 0x800) ? "utf8" : "utf8")
+      .replace(/\\/g, "/");
+
+    offset += 46 + fileNameLength + extraLength + commentLength;
+    if (!fileName || fileName.endsWith("/")) continue;
+
+    const target = path.resolve(destRoot, fileName);
+    if (target !== destRoot && !target.startsWith(`${destRoot}${path.sep}`)) {
+      throw new Error(`Unsafe zip entry path: ${fileName}`);
+    }
+
+    if (zip.readUInt32LE(localHeaderOffset) !== 0x04034b50) {
+      throw new Error(`Invalid zip local header for ${fileName}`);
+    }
+    const localNameLength = zip.readUInt16LE(localHeaderOffset + 26);
+    const localExtraLength = zip.readUInt16LE(localHeaderOffset + 28);
+    const dataOffset = localHeaderOffset + 30 + localNameLength + localExtraLength;
+    const compressed = zip.subarray(dataOffset, dataOffset + compressedSize);
+    let data;
+    if (method === 0) data = compressed;
+    else if (method === 8) data = zlib.inflateRawSync(compressed);
+    else throw new Error(`Unsupported zip compression method ${method} for ${fileName}`);
+
+    await fs.mkdir(path.dirname(target), { recursive: true });
+    await fs.writeFile(target, data);
+    extracted += 1;
+  }
+
+  console.log(`Node zip extractor wrote ${extracted} files.`);
+}
+
+function findEndOfCentralDirectory(zip) {
+  const min = Math.max(0, zip.length - 0xffff - 22);
+  for (let offset = zip.length - 22; offset >= min; offset -= 1) {
+    if (zip.readUInt32LE(offset) === 0x06054b50) return offset;
+  }
+  return -1;
+}
+
+async function directoryHasEntries(dir) {
+  try {
+    const entries = await fs.readdir(dir);
+    return entries.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+async function describeDirectory(dir) {
+  try {
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    if (entries.length === 0) return "(empty)";
+    return entries
+      .slice(0, 20)
+      .map((entry) => `${entry.isDirectory() ? "[dir]" : "[file]"} ${entry.name}`)
+      .join(", ");
+  } catch (error) {
+    return `unable to read ${dir}: ${error.message}`;
+  }
+}
+
+async function describeFile(file) {
+  try {
+    const stat = await fs.stat(file);
+    const handle = await fs.open(file, "r");
+    try {
+      const header = Buffer.alloc(Math.min(8, stat.size));
+      await handle.read(header, 0, header.length, 0);
+      return `${stat.size} bytes, first bytes ${header.toString("hex") || "(none)"}`;
+    } finally {
+      await handle.close();
+    }
+  } catch (error) {
+    return `unable to read ${file}: ${error.message}`;
+  }
 }
 
 function parseFlags(values) {
