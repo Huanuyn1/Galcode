@@ -7,11 +7,14 @@ import { createHash } from "node:crypto";
 import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
 // Cross-platform helpers.  Code is shared across macOS / Linux / Windows;
 // only the launcher scripts (galcode / galcode.bat) and README differ.
 const isWindows = process.platform === "win32";
 const isMac = process.platform === "darwin";
+const PROJECT_ROOT = resolveProjectRoot();
+process.chdir(PROJECT_ROOT);
 
 async function extractZip(zipPath, destDir) {
   if (isWindows) {
@@ -102,6 +105,18 @@ const CHARACTER_CATALOG = [
   { key: "umiri", displayName: "八幡海铃", aliases: ["八幡海铃", "八幡海鈴", "海铃", "海鈴", "Umiri", "Yahata Umiri"] },
   { key: "nyamu", displayName: "祐天寺若麦", aliases: ["祐天寺若麦", "祐天寺若麥", "若麦", "若麥", "喵梦", "喵夢", "Nyamu", "Yutenji Nyamu"] }
 ];
+
+function resolveProjectRoot() {
+  const envRoot = process.env.GALCODE_ROOT || "";
+  if (envRoot && isProjectRoot(envRoot)) return path.resolve(envRoot);
+  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+}
+
+function isProjectRoot(dir) {
+  return fssync.existsSync(path.join(dir, "package.json")) &&
+    fssync.existsSync(path.join(dir, "bin", "galcode.js")) &&
+    fssync.existsSync(path.join(dir, "src", "galcode.js"));
+}
 
 // ═══ AI 提示词（软编码）══════════════════════════════════════
 // 内置中文默认值。运行时优先读取 .galcode/prompts/*.txt；

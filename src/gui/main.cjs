@@ -6,11 +6,12 @@ const fsp = fs.promises;
 const path = require("node:path");
 const { spawn } = require("node:child_process");
 
-const ROOT_DIR = process.env.GALCODE_ROOT || path.resolve(__dirname, "../..");
+const ROOT_DIR = resolveRootDir();
 const NODE = process.env.GALCODE_NODE || findNode() || "node";
 let mainWindow = null;
 let activeChild = null;
 
+process.chdir(ROOT_DIR);
 app.setName("Galcode");
 
 app.whenReady().then(() => {
@@ -71,7 +72,14 @@ ipcMain.handle("galcode:run", async (event, task) => {
   if (activeChild) throw new Error("已有任务正在运行，请先停止或等待完成。");
   const id = task.id || `task-${Date.now()}`;
   const command = buildTaskCommand(task);
-  sendLog(id, `$ ${command.label}\n`);
+  sendLog(id, [
+    `Root: ${ROOT_DIR}`,
+    `Node: ${NODE}`,
+    `Electron: ${process.execPath}`,
+    `CWD: ${process.cwd()}`,
+    `$ ${command.label}`,
+    ""
+  ].join("\n"));
 
   activeChild = spawnNormalized(command.command, command.args, {
     cwd: ROOT_DIR,
@@ -79,6 +87,7 @@ ipcMain.handle("galcode:run", async (event, task) => {
       ...process.env,
       GALCODE_ROOT: ROOT_DIR,
       GALCODE_NODE: NODE,
+      ELECTRON: process.execPath,
       PATH: buildPath()
     }
   });
@@ -196,6 +205,18 @@ function buildPath() {
     "/usr/local/bin",
     process.env.PATH || ""
   ].filter(Boolean).join(path.delimiter);
+}
+
+function resolveRootDir() {
+  const envRoot = process.env.GALCODE_ROOT || "";
+  if (envRoot && isProjectRoot(envRoot)) return path.resolve(envRoot);
+  return path.resolve(__dirname, "../..");
+}
+
+function isProjectRoot(dir) {
+  return fs.existsSync(path.join(dir, "package.json")) &&
+    fs.existsSync(path.join(dir, "bin", "galcode.js")) &&
+    fs.existsSync(path.join(dir, "src", "galcode.js"));
 }
 
 function findNode() {

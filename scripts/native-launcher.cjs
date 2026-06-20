@@ -29,6 +29,8 @@ const REQUIRED_PROJECT_TEXT = [
   [path.join("scripts", "galcode-bootstrap.mjs"), "replaceDirectorySafely"],
   [path.join("scripts", "galcode-bootstrap.mjs"), "preserveLive2DRuntimeFiles"],
   [path.join("src", "galcode.js"), "npmInvocation"],
+  [path.join("src", "galcode.js"), "resolveProjectRoot"],
+  [path.join("src", "gui", "main.cjs"), "resolveRootDir"],
   [path.join("src", "electron-recorder.cjs"), "startFfmpegEncoder"]
 ];
 const PRESERVED_INSTALL_PATHS = [
@@ -70,6 +72,8 @@ async function main() {
       cwd: rootDir,
       env: {
         ...process.env,
+        GALCODE_ROOT: rootDir,
+        GALCODE_NODE: node.exe,
         GALCODE_LOG_FILE: LAUNCH_LOG,
         PATH: [node.binDir, path.join(rootDir, "tools", "bin"), systemPath()].filter(Boolean).join(path.delimiter)
       },
@@ -89,6 +93,8 @@ async function main() {
     cwd: rootDir,
     env: {
       ...process.env,
+      GALCODE_ROOT: rootDir,
+      GALCODE_NODE: node.exe,
       GALCODE_LOG_FILE: LAUNCH_LOG,
       PATH: [node.binDir, path.join(rootDir, "tools", "bin"), process.env.PATH || ""].filter(Boolean).join(path.delimiter)
     },
