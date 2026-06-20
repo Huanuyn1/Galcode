@@ -126,37 +126,117 @@ async function repairElectron(flags) {
     return;
   }
 
-  const runtimePath = getExpectedElectronPath();
-  const frameworkPath = path.join(
-    ROOT_DIR,
-    "node_modules",
-    "electron",
-    "dist",
-    "Electron.app",
-    "Contents",
-    "Frameworks",
-    "Electron Framework.framework",
-    "Electron Framework"
-  );
-  const runtimeOK = fssync.existsSync(runtimePath) && (!isMac || fssync.existsSync(frameworkPath));
-
-  if (!flags.force && runtimeOK) {
+  const runtimeStatus = getElectronRuntimeStatus();
+  if (!flags.force && runtimeStatus.ok) {
     console.log("[2/5] Electron runtime: OK");
     return;
   }
 
   console.log("[2/5] Repairing Electron runtime...");
+  if (runtimeStatus.missing.length > 0) {
+    console.log(`Electron runtime missing: ${runtimeStatus.missing.join(", ")}`);
+  }
   await fs.rm(path.join(ROOT_DIR, "node_modules", "electron", "dist"), { recursive: true, force: true });
   await fs.rm(path.join(ROOT_DIR, "node_modules", "electron", "path.txt"), { force: true });
   await run(process.execPath, ["install.js"], {
-    cwd: path.join(ROOT_DIR, "node_modules", "electron")
+    cwd: path.join(ROOT_DIR, "node_modules", "electron"),
+    env: {
+      ELECTRON_SKIP_BINARY_DOWNLOAD: "",
+      ELECTRON_OVERRIDE_DIST_PATH: "",
+      force_no_cache: "true"
+    }
   });
+
+  const repairedStatus = getElectronRuntimeStatus();
+  if (!repairedStatus.ok) {
+    console.warn(`Electron install.js left an incomplete runtime. Missing: ${repairedStatus.missing.join(", ")}`);
+    console.warn("Falling back to direct Electron archive extraction.");
+    await repairElectronFromArchive();
+  }
+
+  const finalStatus = getElectronRuntimeStatus();
+  if (!finalStatus.ok) {
+    throw new Error(`Electron runtime is still incomplete after repair. Missing: ${finalStatus.missing.join(", ")}. Delete node_modules/electron and rerun ./install.sh.`);
+  }
 }
 
 function getExpectedElectronPath() {
   if (isWindows) return path.join(ROOT_DIR, "node_modules", "electron", "dist", "electron.exe");
   if (isMac) return path.join(ROOT_DIR, "node_modules", "electron", "dist", "Electron.app", "Contents", "MacOS", "Electron");
   return path.join(ROOT_DIR, "node_modules", "electron", "dist", "electron");
+}
+
+function getElectronRuntimeStatus() {
+  const missing = [];
+  const runtimePath = getExpectedElectronPath();
+  if (!fssync.existsSync(runtimePath)) missing.push(path.relative(ROOT_DIR, runtimePath));
+  if (isMac) {
+    const frameworkPath = path.join(
+      ROOT_DIR,
+      "node_modules",
+      "electron",
+      "dist",
+      "Electron.app",
+      "Contents",
+      "Frameworks",
+      "Electron Framework.framework",
+      "Electron Framework"
+    );
+    if (!fssync.existsSync(frameworkPath)) missing.push(path.relative(ROOT_DIR, frameworkPath));
+  }
+  return { ok: missing.length === 0, missing };
+}
+
+async function repairElectronFromArchive() {
+  const electronDir = path.join(ROOT_DIR, "node_modules", "electron");
+  const packageJson = await readJson(path.join(electronDir, "package.json"));
+  const checksums = await readJson(path.join(electronDir, "checksums.json")).catch(() => undefined);
+  const electronGet = await import("@electron/get");
+  const zipPath = await electronGet.downloadArtifact({
+    version: packageJson.version,
+    artifactName: "electron",
+    force: true,
+    checksums,
+    platform: process.platform,
+    arch: process.arch
+  });
+  const distDir = path.join(electronDir, "dist");
+  await fs.rm(distDir, { recursive: true, force: true });
+  await fs.mkdir(distDir, { recursive: true });
+  await extractElectronArchive(zipPath, distDir);
+  await fs.writeFile(path.join(electronDir, "path.txt"), getElectronPlatformPath());
+}
+
+async function extractElectronArchive(zipPath, destDir) {
+  if (isMac && await commandExists("ditto")) {
+    await run("ditto", ["-x", "-k", zipPath, destDir]);
+    return;
+  }
+  if (!isWindows && await commandExists("unzip")) {
+    await run("unzip", ["-qo", zipPath, "-d", destDir]);
+    return;
+  }
+  if (isWindows && await commandExists("powershell")) {
+    await run("powershell", [
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-Command",
+      `Expand-Archive -Force -LiteralPath ${psQuote(zipPath)} -DestinationPath ${psQuote(destDir)}`
+    ]);
+    return;
+  }
+  await extractZipWithNode(zipPath, destDir);
+}
+
+function getElectronPlatformPath() {
+  if (isWindows) return "electron.exe";
+  if (isMac) return "Electron.app/Contents/MacOS/Electron";
+  return "electron";
+}
+
+async function readJson(file) {
+  return JSON.parse(await fs.readFile(file, "utf8"));
 }
 
 async function ensureWebGALEngine(flags) {
@@ -358,7 +438,7 @@ async function doctor() {
     ["npm", npm.label, await npmAvailable(npm)],
     ["ffmpeg", "ffmpeg", await commandExists("ffmpeg")],
     ["Galcode node_modules", "node_modules", fssync.existsSync(path.join(ROOT_DIR, "node_modules"))],
-    ["Electron runtime", getExpectedElectronPath(), fssync.existsSync(getExpectedElectronPath())],
+    ["Electron runtime", getExpectedElectronPath(), getElectronRuntimeStatus().ok],
     ["WebGAL engine", WEBGAL_DIR, fssync.existsSync(path.join(WEBGAL_DIR, "packages", "webgal", "package.json"))],
     ["WebGAL node_modules", path.join(WEBGAL_DIR, "node_modules"), fssync.existsSync(path.join(WEBGAL_DIR, "node_modules"))],
     ["WebGAL parser", path.join(WEBGAL_DIR, "packages", "parser", "build", "es", "index.js"), fssync.existsSync(path.join(WEBGAL_DIR, "packages", "parser", "build", "es", "index.js"))]
@@ -477,13 +557,14 @@ async function runNpm(args, cwd) {
 
 async function commandExists(command) {
   return new Promise((resolve) => {
+    const env = { ...process.env, PATH: buildPath() };
     if (command.includes(path.sep)) {
       resolve(fssync.existsSync(command));
       return;
     }
     const child = isWindows
-      ? spawn("where", [command], { stdio: "ignore" })
-      : spawn("sh", ["-c", `command -v ${shellQuote(command)} >/dev/null 2>&1`], { stdio: "ignore" });
+      ? spawn("where", [command], { stdio: "ignore", env })
+      : spawn("sh", ["-c", `command -v ${shellQuote(command)} >/dev/null 2>&1`], { stdio: "ignore", env });
     child.on("error", () => resolve(false));
     child.on("exit", (code) => resolve(code === 0));
   });
