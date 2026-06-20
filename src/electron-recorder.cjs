@@ -4,6 +4,7 @@
 const { app, BrowserWindow } = require("electron");
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 
 const args = parseArgs(process.argv.slice(2));
@@ -82,52 +83,45 @@ async function main() {
 
   const captureStart = Date.now();
 
-  const encoder = startFfmpegEncoder({ ffmpeg, out, width, height, fps });
+  const rawFile = path.join(os.tmpdir(), `galcode-electron-${process.pid}-${Date.now()}.bgra`);
+  const fd = fs.openSync(rawFile, "w");
   let frameCount = 0;
-  let duplicateFrames = 0;
-  let lastFrame = null;
   let titleSeen = false;
   let lastTitleCheck = 0;
-  let lastBehindLog = 0;
-  const targetFrames = Math.max(1, Math.round(duration * fps));
+  const captureEnd = captureStart + duration * 1000;
   const titleCheckIntervalMs = 2000;
   const frameIntervalMs = 1000 / fps;
   let loggedFrameInfo = false;
+  let outputDurationSec = duration;
 
-  console.error(`Galcode electron recording: ${width}x${height} @ ${fps} fps, ${duration}s (${targetFrames} frames) -> ${out}`);
+  console.error(`Galcode electron recording: ${width}x${height} @ ${fps} fps, ${duration}s -> ${out}`);
+  console.error(`Galcode electron raw capture: ${rawFile}`);
 
+  let captureError = null;
   try {
     let nextCaptureTime = performance.now();
+    let pendingCapture = win.webContents.capturePage();
 
-    while (frameCount < targetFrames) {
-      const now = performance.now();
-      while (lastFrame && frameCount < targetFrames && now - nextCaptureTime >= frameIntervalMs) {
-        await writeFrame(encoder.stdin, lastFrame);
-        frameCount++;
-        duplicateFrames++;
-        nextCaptureTime += frameIntervalMs;
-      }
-
-      if (duplicateFrames > 0 && Date.now() - lastBehindLog > 2000) {
-        lastBehindLog = Date.now();
-        console.error(`Galcode electron: capture is behind; duplicated ${duplicateFrames} frame(s) so output duration stays ${duration}s`);
-      }
-
-      if (frameCount >= targetFrames) break;
-
+    while (Date.now() < captureEnd) {
       const delay = nextCaptureTime - performance.now();
-      if (delay > 0) await sleep(delay);
-      const captured = await captureFrame(win, {
+      if (delay > 1) await sleep(delay - 0.5);
+      while (performance.now() < nextCaptureTime) { /* sub-ms frame alignment */ }
+
+      const image = await pendingCapture;
+      pendingCapture = win.webContents.capturePage();
+      loggedFrameInfo = writeCapturedFrame(image, fd, {
         width,
         height,
         expectedFrameBytes,
         loggedFrameInfo
       });
-      loggedFrameInfo = captured.loggedFrameInfo;
-      lastFrame = captured.frame;
-      await writeFrame(encoder.stdin, lastFrame);
       frameCount++;
       nextCaptureTime += frameIntervalMs;
+
+      if (nextCaptureTime < performance.now() - frameIntervalMs * 2) {
+        console.error(`Galcode electron: drift corrected at frame ${frameCount}`);
+        nextCaptureTime = performance.now() + frameIntervalMs;
+      }
 
       const wallElapsed = Date.now() - captureStart;
       if (!titleSeen && wallElapsed > 10000 && wallElapsed - lastTitleCheck >= titleCheckIntervalMs) {
@@ -137,6 +131,7 @@ async function main() {
           titleSeen = true;
           if (args.stopOnTitle) {
             console.error(`Galcode electron title screen detected at ${Math.round(wallElapsed / 1000)}s; stopping early because --stop-on-title was set`);
+            outputDurationSec = Math.max(0.001, (Date.now() - captureStart) / 1000);
             break;
           }
           console.error(`Galcode electron title screen detected at ${Math.round(wallElapsed / 1000)}s; continuing until requested duration (${duration}s)`);
@@ -144,18 +139,30 @@ async function main() {
       }
     }
   } catch (error) {
-    encoder.child.kill("SIGTERM");
-    throw error;
+    captureError = error;
+  } finally {
+    fs.closeSync(fd);
+  }
+  if (captureError) {
+    fs.rmSync(rawFile, { force: true });
+    throw captureError;
   }
 
   if (frameCount === 0) throw new Error("No frames were captured.");
-  encoder.stdin.end();
-  await encoder.done;
 
   const elapsedSec = Math.max(0.001, (Date.now() - captureStart) / 1000);
-  const outputSec = frameCount / fps;
-  console.error(`Galcode electron captured ${frameCount} frames (${outputSec.toFixed(2)}s at ${fps} fps) in ${elapsedSec.toFixed(2)}s wall time`);
-  if (duplicateFrames > 0) console.error(`Galcode electron duplicated ${duplicateFrames} frame(s) to preserve constant-duration video`);
+  const inputFps = frameCount / outputDurationSec;
+  const outputFrames = Math.max(1, Math.round(outputDurationSec * fps));
+  const rawSize = fs.statSync(rawFile).size;
+  console.error(`Galcode electron captured ${frameCount} real frames in ${elapsedSec.toFixed(2)}s wall time`);
+  console.error(`Galcode electron encoding as ${inputFps.toFixed(6)} input fps -> ${fps} output fps (${outputDurationSec.toFixed(2)}s, ${outputFrames} frames)`);
+  console.error(`Galcode electron raw file: ${rawSize} bytes (expected ${frameCount * expectedFrameBytes})`);
+
+  try {
+    await encodeRawVideo({ ffmpeg, rawFile, out, width, height, inputFps, fps, outputFrames });
+  } finally {
+    fs.rmSync(rawFile, { force: true });
+  }
 
   const outStat = fs.statSync(out, { throwIfNoEntry: false });
   console.error(`Galcode electron output: ${out} (${outStat ? outStat.size + " bytes" : "MISSING"})`);
@@ -169,19 +176,16 @@ async function main() {
   app.exit(1);
 }
 
-async function captureFrame(win, options) {
+function writeCapturedFrame(image, fd, options) {
   const { width, height, expectedFrameBytes } = options;
-  const image = await win.webContents.capturePage();
   const frameImage = image.resize({ width, height, quality: "best" });
   const bitmap = frameImage.toBitmap();
   if (!options.loggedFrameInfo) {
     const size = image.getSize();
     console.error(`Galcode electron capturePage: ${size.width}x${size.height} -> ${width}x${height}, ${bitmap.length} bytes`);
   }
-  return {
-    frame: normalizeBitmap(bitmap, expectedFrameBytes),
-    loggedFrameInfo: true
-  };
+  fs.writeSync(fd, normalizeBitmap(bitmap, expectedFrameBytes));
+  return true;
 }
 
 function normalizeBitmap(bitmap, expectedBytes) {
@@ -191,55 +195,34 @@ function normalizeBitmap(bitmap, expectedBytes) {
   return fixed;
 }
 
-function startFfmpegEncoder({ ffmpeg, out, width, height, fps }) {
+function encodeRawVideo({ ffmpeg, rawFile, out, width, height, inputFps, fps, outputFrames }) {
   const ffmpegArgs = [
     "-y",
     "-f", "rawvideo",
     "-pix_fmt", "bgra",
     "-s", `${width}x${height}`,
-    "-framerate", String(fps),
-    "-i", "pipe:0",
+    "-framerate", inputFps.toFixed(6),
+    "-i", rawFile,
     "-an",
     "-r", String(fps),
     "-pix_fmt", "yuv420p",
     "-c:v", "libx264",
     "-preset", "ultrafast",
     "-crf", String(args.crf || 23),
+    "-frames:v", String(outputFrames),
     out
   ];
   console.error(`Galcode electron ffmpeg: ${ffmpeg} ${ffmpegArgs.map(quoteArg).join(" ")}`);
-  const child = spawn(ffmpeg, ffmpegArgs, {
-    stdio: ["pipe", "ignore", "inherit"],
-    windowsHide: true
-  });
-  const done = new Promise((resolve, reject) => {
+  return new Promise((resolve, reject) => {
+    const child = spawn(ffmpeg, ffmpegArgs, {
+      stdio: "inherit",
+      windowsHide: true
+    });
     child.on("error", reject);
     child.on("exit", (code, signal) => {
       if (code === 0) resolve();
       else reject(new Error(`${ffmpeg} exited with ${code ?? signal}`));
     });
-  });
-  return { child, stdin: child.stdin, done };
-}
-
-async function writeFrame(stream, frame) {
-  if (stream.destroyed) throw new Error("ffmpeg stdin closed before recording finished.");
-  if (stream.write(frame)) return;
-  await new Promise((resolve, reject) => {
-    const cleanup = () => {
-      stream.off("drain", onDrain);
-      stream.off("error", onError);
-    };
-    const onDrain = () => {
-      cleanup();
-      resolve();
-    };
-    const onError = (error) => {
-      cleanup();
-      reject(error);
-    };
-    stream.once("drain", onDrain);
-    stream.once("error", onError);
   });
 }
 
