@@ -18,6 +18,7 @@ const out = path.resolve(args.out || "final.mp4");
 const ffmpeg = args.ffmpeg || "ffmpeg";
 const startDelay = Number(args.startDelay || 1500);
 const GALCODE_RECORDER_MODE = "capture-page-pipeline-20260620";
+const gpuMode = normalizeGpuMode(args.electronGpu || args.gpuMode || args.gpu || process.env.GALCODE_ELECTRON_GPU || "hardware");
 
 if (!url) fail("Missing --url");
 
@@ -38,11 +39,8 @@ app.commandLine.appendSwitch("disable-renderer-backgrounding");
 app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 app.commandLine.appendSwitch("force-device-scale-factor", "1");
-app.commandLine.appendSwitch("enable-webgl");
-app.commandLine.appendSwitch("ignore-gpu-blocklist");
-app.commandLine.appendSwitch("enable-gpu-rasterization");
+configureGpuMode(gpuMode);
 if (isWindows) {
-  app.commandLine.appendSwitch("enable-unsafe-swiftshader");
   app.commandLine.appendSwitch("disable-features", "CalculateNativeWinOcclusion");
 }
 
@@ -97,6 +95,7 @@ async function main() {
 
   console.error(`Galcode electron recording: ${width}x${height} @ ${fps} fps, ${duration}s -> ${out}`);
   console.error(`Galcode electron recorder mode: ${GALCODE_RECORDER_MODE}`);
+  console.error(`Galcode electron GPU mode: ${gpuMode}`);
   console.error(`Galcode electron raw capture: ${rawFile}`);
 
   let captureError = null;
@@ -231,6 +230,38 @@ function encodeRawVideo({ ffmpeg, rawFile, out, width, height, inputFps, fps, ou
 function quoteArg(value) {
   const text = String(value);
   return /\s/.test(text) ? `"${text.replace(/"/g, '\\"')}"` : text;
+}
+
+function normalizeGpuMode(value) {
+  const mode = String(value || "hardware").toLowerCase();
+  if (mode === "cpu" || mode === "software" || mode === "off" || mode === "disabled" || mode === "false" || mode === "0") return "software";
+  if (mode === "swiftshader" || mode === "swift-shader") return "swiftshader";
+  if (mode === "hardware" || mode === "gpu" || mode === "on" || mode === "true" || mode === "1" || mode === "auto") return "hardware";
+  throw new Error(`Unknown --electron-gpu mode: ${value}. Use hardware, software, swiftshader, or auto.`);
+}
+
+function configureGpuMode(mode) {
+  if (mode === "software") {
+    app.disableHardwareAcceleration();
+    app.commandLine.appendSwitch("disable-gpu-compositing");
+    app.commandLine.appendSwitch("disable-gpu-rasterization");
+    app.commandLine.appendSwitch("disable-accelerated-2d-canvas");
+    if (isWindows) app.commandLine.appendSwitch("enable-unsafe-swiftshader");
+    return;
+  }
+
+  if (mode === "swiftshader") {
+    app.commandLine.appendSwitch("enable-webgl");
+    app.commandLine.appendSwitch("enable-unsafe-swiftshader");
+    app.commandLine.appendSwitch("use-angle", "swiftshader");
+    app.commandLine.appendSwitch("use-gl", "swiftshader");
+    return;
+  }
+
+  app.commandLine.appendSwitch("enable-webgl");
+  app.commandLine.appendSwitch("ignore-gpu-blocklist");
+  app.commandLine.appendSwitch("enable-gpu-rasterization");
+  if (isWindows) app.commandLine.appendSwitch("enable-unsafe-swiftshader");
 }
 
 async function autoplay(win) {

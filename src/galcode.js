@@ -406,6 +406,8 @@ Recording:
   Default recording FPS is 60. Use --fps <n> to override.
   --duration <seconds> is honored as the target video duration when provided.
   Add --stop-on-title only if you want recording to end early at the title screen.
+  For Windows GPU/driver crashes, try --electron-gpu software. Modes:
+  auto, hardware, software, swiftshader. Windows defaults to auto.
   Recommended capture backend is --capture electron: cross-platform background
   Chromium offscreen rendering. --capture avfoundation is macOS-only visible
   screen capture; --capture screenshot is a deterministic fallback.
@@ -2793,29 +2795,58 @@ async function recordWithElectronOffscreen(url, { width, height, duration, fps, 
   }
   const script = path.resolve("src/electron-recorder.cjs");
   if (!fssync.existsSync(script)) throw new Error(`Electron recorder script not found: ${script}`);
-  await runRecorderProcess(electron, [
-    script,
-    "--url", url,
-    "--out", out,
-    "--duration", String(duration),
-    "--fps", String(fps),
-    "--width", String(width),
-    "--height", String(height),
-    "--ffmpeg", flags.ffmpeg || "ffmpeg",
-    "--start-delay", String(flags.startDelay || 1500),
-    "--scene-delay", String(flags.sceneDelay || 8000),
-    "--click-interval", String(flags.clickInterval || 3000),
-    ...(flags.noAutoplay ? ["--no-autoplay"] : []),
-    ...(flags.stopOnTitle ? ["--stop-on-title"] : [])
-  ], {
-    quietWithOutput: !flags.electronLogs,
-    timeoutMs: Number(flags.recordTimeout || Math.max(180000, duration * 2000 + 180000)),
-    env: {
-      ...process.env,
-      ELECTRON_ENABLE_LOGGING: flags.electronLogs ? "1" : process.env.ELECTRON_ENABLE_LOGGING || "",
-      PATH: [resolveToolsBin(), process.env.PATH || ""].filter(Boolean).join(path.delimiter)
+  const gpuMode = resolveElectronGpuMode(flags);
+  const gpuAttempts = gpuMode === "auto" ? ["hardware", "software"] : [gpuMode];
+  let lastError = null;
+
+  for (let index = 0; index < gpuAttempts.length; index += 1) {
+    const attemptMode = gpuAttempts[index];
+    if (index > 0) console.warn(`Retrying Electron recorder with --electron-gpu ${attemptMode} after GPU-mode failure.`);
+    try {
+      await runRecorderProcess(electron, [
+        script,
+        "--url", url,
+        "--out", out,
+        "--duration", String(duration),
+        "--fps", String(fps),
+        "--width", String(width),
+        "--height", String(height),
+        "--ffmpeg", flags.ffmpeg || "ffmpeg",
+        "--start-delay", String(flags.startDelay || 1500),
+        "--scene-delay", String(flags.sceneDelay || 8000),
+        "--click-interval", String(flags.clickInterval || 3000),
+        "--electron-gpu", attemptMode,
+        ...(flags.noAutoplay ? ["--no-autoplay"] : []),
+        ...(flags.stopOnTitle ? ["--stop-on-title"] : [])
+      ], {
+        quietWithOutput: !flags.electronLogs,
+        timeoutMs: Number(flags.recordTimeout || Math.max(180000, duration * 2000 + 180000)),
+        env: {
+          ...process.env,
+          GALCODE_ELECTRON_GPU: attemptMode,
+          ELECTRON_ENABLE_LOGGING: flags.electronLogs ? "1" : process.env.ELECTRON_ENABLE_LOGGING || "",
+          PATH: [resolveToolsBin(), process.env.PATH || ""].filter(Boolean).join(path.delimiter)
+        }
+      });
+      return;
+    } catch (error) {
+      lastError = error;
+      if (index >= gpuAttempts.length - 1) break;
     }
-  });
+  }
+
+  throw lastError;
+}
+
+function resolveElectronGpuMode(flags) {
+  if (flags.disableGpu || flags.softwareRendering || flags.cpuRendering) return "software";
+  const raw = flags.electronGpu || flags.electronGpuMode || flags.gpuMode || flags.gpu || process.env.GALCODE_ELECTRON_GPU || (process.platform === "win32" ? "auto" : "hardware");
+  const mode = String(raw).toLowerCase();
+  if (mode === "auto") return "auto";
+  if (mode === "cpu" || mode === "software" || mode === "off" || mode === "disabled" || mode === "false" || mode === "0") return "software";
+  if (mode === "swiftshader" || mode === "swift-shader") return "swiftshader";
+  if (mode === "hardware" || mode === "gpu" || mode === "on" || mode === "true" || mode === "1") return "hardware";
+  throw new Error(`Unknown --electron-gpu mode: ${raw}. Use auto, hardware, software, or swiftshader.`);
 }
 
 function runRecorderProcess(command, args, options = {}) {
