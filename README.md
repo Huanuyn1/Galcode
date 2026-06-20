@@ -135,7 +135,7 @@ OPENAI_API_KEY=sk-your-key-here
 
 ```bash
 # 打开图形界面
-npm run gui
+./galcode gui
 
 # 命令行交互讨论模式
 ./galcode
@@ -154,6 +154,12 @@ Windows PowerShell 把 `./galcode` 换成：
 
 ```powershell
 .\galcode.bat
+```
+
+所以 Windows 打开图形界面是：
+
+```powershell
+.\galcode.bat gui
 ```
 
 ## 录制

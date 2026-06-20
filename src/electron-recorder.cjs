@@ -84,56 +84,62 @@ async function main() {
 
   const encoder = startFfmpegEncoder({ ffmpeg, out, width, height, fps });
   let frameCount = 0;
-  let gameEnded = false;
+  let duplicateFrames = 0;
+  let lastFrame = null;
+  let titleSeen = false;
   let lastTitleCheck = 0;
+  let lastBehindLog = 0;
   const targetFrames = Math.max(1, Math.round(duration * fps));
   const titleCheckIntervalMs = 2000;
   const frameIntervalMs = 1000 / fps;
   let loggedFrameInfo = false;
 
-  console.error(`Galcode electron recording: ${width}x${height} @ ${fps} fps, ${duration}s -> ${out}`);
+  console.error(`Galcode electron recording: ${width}x${height} @ ${fps} fps, ${duration}s (${targetFrames} frames) -> ${out}`);
 
   try {
     let nextCaptureTime = performance.now();
 
-    while (frameCount < targetFrames && !gameEnded) {
+    while (frameCount < targetFrames) {
+      const now = performance.now();
+      while (lastFrame && frameCount < targetFrames && now - nextCaptureTime >= frameIntervalMs) {
+        await writeFrame(encoder.stdin, lastFrame);
+        frameCount++;
+        duplicateFrames++;
+        nextCaptureTime += frameIntervalMs;
+      }
+
+      if (duplicateFrames > 0 && Date.now() - lastBehindLog > 2000) {
+        lastBehindLog = Date.now();
+        console.error(`Galcode electron: capture is behind; duplicated ${duplicateFrames} frame(s) so output duration stays ${duration}s`);
+      }
+
+      if (frameCount >= targetFrames) break;
+
       const delay = nextCaptureTime - performance.now();
       if (delay > 0) await sleep(delay);
-      loggedFrameInfo = await captureFrame(win, encoder, {
+      const captured = await captureFrame(win, {
         width,
         height,
         expectedFrameBytes,
         loggedFrameInfo
       });
+      loggedFrameInfo = captured.loggedFrameInfo;
+      lastFrame = captured.frame;
+      await writeFrame(encoder.stdin, lastFrame);
       frameCount++;
       nextCaptureTime += frameIntervalMs;
 
-      if (nextCaptureTime < performance.now() - frameIntervalMs * 5) {
-        console.error(`Galcode electron: capture is behind at frame ${frameCount}; continuing without catch-up burst`);
-        nextCaptureTime = performance.now();
-      }
-
       const wallElapsed = Date.now() - captureStart;
-      if (!gameEnded && wallElapsed > 10000 && wallElapsed - lastTitleCheck >= titleCheckIntervalMs) {
+      if (!titleSeen && wallElapsed > 10000 && wallElapsed - lastTitleCheck >= titleCheckIntervalMs) {
         lastTitleCheck = wallElapsed;
         const onTitle = await isSelectorVisible(win, ".Title_button, [class*=\"Title_button\"]");
         if (onTitle) {
-          console.error(`Galcode electron game ended at ${Math.round(wallElapsed / 1000)}s (frame ${frameCount})`);
-          gameEnded = true;
-          const tailFrames = Math.round(3 * fps);
-          for (let i = 0; i < tailFrames; i += 1) {
-            const td = nextCaptureTime - performance.now();
-            if (td > 0) await sleep(td);
-            loggedFrameInfo = await captureFrame(win, encoder, {
-              width,
-              height,
-              expectedFrameBytes,
-              loggedFrameInfo
-            });
-            frameCount++;
-            nextCaptureTime += frameIntervalMs;
+          titleSeen = true;
+          if (args.stopOnTitle) {
+            console.error(`Galcode electron title screen detected at ${Math.round(wallElapsed / 1000)}s; stopping early because --stop-on-title was set`);
+            break;
           }
-          break;
+          console.error(`Galcode electron title screen detected at ${Math.round(wallElapsed / 1000)}s; continuing until requested duration (${duration}s)`);
         }
       }
     }
@@ -147,7 +153,9 @@ async function main() {
   await encoder.done;
 
   const elapsedSec = Math.max(0.001, (Date.now() - captureStart) / 1000);
-  console.error(`Galcode electron captured ${frameCount} frames in ${elapsedSec.toFixed(2)}s (target ${fps} fps)`);
+  const outputSec = frameCount / fps;
+  console.error(`Galcode electron captured ${frameCount} frames (${outputSec.toFixed(2)}s at ${fps} fps) in ${elapsedSec.toFixed(2)}s wall time`);
+  if (duplicateFrames > 0) console.error(`Galcode electron duplicated ${duplicateFrames} frame(s) to preserve constant-duration video`);
 
   const outStat = fs.statSync(out, { throwIfNoEntry: false });
   console.error(`Galcode electron output: ${out} (${outStat ? outStat.size + " bytes" : "MISSING"})`);
@@ -161,7 +169,7 @@ async function main() {
   app.exit(1);
 }
 
-async function captureFrame(win, encoder, options) {
+async function captureFrame(win, options) {
   const { width, height, expectedFrameBytes } = options;
   const image = await win.webContents.capturePage();
   const frameImage = image.resize({ width, height, quality: "best" });
@@ -170,8 +178,10 @@ async function captureFrame(win, encoder, options) {
     const size = image.getSize();
     console.error(`Galcode electron capturePage: ${size.width}x${size.height} -> ${width}x${height}, ${bitmap.length} bytes`);
   }
-  await writeFrame(encoder.stdin, normalizeBitmap(bitmap, expectedFrameBytes));
-  return true;
+  return {
+    frame: normalizeBitmap(bitmap, expectedFrameBytes),
+    loggedFrameInfo: true
+  };
 }
 
 function normalizeBitmap(bitmap, expectedBytes) {

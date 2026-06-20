@@ -309,6 +309,7 @@ export async function main(argv) {
   if (!command) return agentCommand(flags);
 
   if (command === "agent" || command === "chat" || command === "interactive") return agentCommand(flags);
+  if (command === "gui" || command === "app") return guiCommand(flags, positionals);
   if (command === "init") return initConfig(flags);
   if (command === "configure") return configureCommand(flags);
   if (command === "setup") return setupRepos(flags);
@@ -362,11 +363,16 @@ function toCamel(value) {
   return value.replace(/-([a-z])/g, (_, char) => char.toUpperCase());
 }
 
+function toKebab(value) {
+  return value.replace(/[A-Z]/g, (char) => `-${char.toLowerCase()}`);
+}
+
 function printHelp() {
   console.log(`Galcode 0.1
 
 Usage:
   galcode
+  galcode gui
   galcode agent
   galcode init
   galcode configure
@@ -382,6 +388,7 @@ Usage:
   galcode record outputs/story --url http://localhost:3000
 
 Modes:
+  gui       Open the graphical Galcode app.
   agent     Interactive AI director. Chat, brainstorm, generate, compile, record.
   discuss   Ask you a few creative-direction questions, then AI writes the work.
   yolo      No questions. AI chooses direction and writes the work.
@@ -397,6 +404,8 @@ Recording:
   start, recording fails with setup instructions instead of silently recording a
   fallback page. Pass --allow-fallback-preview to record preview.html for debugging.
   Default recording FPS is 60. Use --fps <n> to override.
+  --duration <seconds> is honored as the target video duration when provided.
+  Add --stop-on-title only if you want recording to end early at the title screen.
   Recommended capture backend is --capture electron: cross-platform background
   Chromium offscreen rendering. --capture avfoundation is macOS-only visible
   screen capture; --capture screenshot is a deterministic fallback.
@@ -422,6 +431,30 @@ Unstable network:
   Use download-assets instead of git clone. It downloads GitHub zip files with
   curl -C - so rerunning the command resumes partial downloads.
 `);
+}
+
+async function guiCommand(flags, positionals) {
+  const bootstrap = path.join(PROJECT_ROOT, "scripts", "galcode-bootstrap.mjs");
+  if (!fssync.existsSync(bootstrap)) {
+    throw new Error(`GUI bootstrap was not found: ${bootstrap}`);
+  }
+  await run(process.execPath, [bootstrap, "gui", "--", ...positionals, ...flagsToArgv(flags)], {
+    cwd: PROJECT_ROOT,
+    env: {
+      ...process.env,
+      GALCODE_ROOT: PROJECT_ROOT
+    }
+  });
+}
+
+function flagsToArgv(flags) {
+  const argv = [];
+  for (const [key, value] of Object.entries(flags)) {
+    if (value === false || value === undefined || value === null) continue;
+    argv.push(`--${toKebab(key)}`);
+    if (value !== true) argv.push(String(value));
+  }
+  return argv;
 }
 
 async function initConfig(flags) {
@@ -2609,10 +2642,10 @@ async function mixBGM(projectDir, videoOut, flags = {}) {
 }
 
 async function recordProject(projectDir, flags) {
-  // 优先取编译时计算的真实时间线（_totalDurationSec），
-  // 仅当 story.json 不存在时才回退到 CLI 参数或默认值。
+  // An explicit CLI duration is a recording contract.  If it is absent, fall
+  // back to the compiled story timeline.
   const storyDuration = await readStoryDuration(projectDir);
-  const duration = Number(storyDuration || flags.duration || flags.durationSec || 180);
+  const duration = Number(flags.duration || flags.durationSec || storyDuration || 180);
   const out = path.resolve(flags.videoOut || path.join(projectDir, "final.mp4"));
   let autoServer = null;
   let url = flags.url || "";
@@ -2772,7 +2805,8 @@ async function recordWithElectronOffscreen(url, { width, height, duration, fps, 
     "--start-delay", String(flags.startDelay || 1500),
     "--scene-delay", String(flags.sceneDelay || 8000),
     "--click-interval", String(flags.clickInterval || 3000),
-    ...(flags.noAutoplay ? ["--no-autoplay"] : [])
+    ...(flags.noAutoplay ? ["--no-autoplay"] : []),
+    ...(flags.stopOnTitle ? ["--stop-on-title"] : [])
   ], {
     quietWithOutput: !flags.electronLogs,
     timeoutMs: Number(flags.recordTimeout || Math.max(180000, duration * 2000 + 180000)),
