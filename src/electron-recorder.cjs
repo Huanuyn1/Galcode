@@ -81,85 +81,25 @@ async function main() {
   if (!args.noAutoplay) await autoplay(win);
   await sleep(startDelay);
 
-  const captureStart = Date.now();
-
-  const rawFile = path.join(os.tmpdir(), `galcode-electron-${process.pid}-${Date.now()}.bgra`);
-  const fd = fs.openSync(rawFile, "w");
-  let frameCount = 0;
-  let titleSeen = false;
-  let lastTitleCheck = 0;
-  const captureEnd = captureStart + duration * 1000;
-  const titleCheckIntervalMs = 2000;
-  const frameIntervalMs = 1000 / fps;
-  let loggedFrameInfo = false;
-  let outputDurationSec = duration;
-
   console.error(`Galcode electron recording: ${width}x${height} @ ${fps} fps, ${duration}s -> ${out}`);
-  console.error(`Galcode electron raw capture: ${rawFile}`);
-
-  let captureError = null;
-  try {
-    let nextCaptureTime = performance.now();
-    let pendingCapture = win.webContents.capturePage();
-
-    while (Date.now() < captureEnd) {
-      const delay = nextCaptureTime - performance.now();
-      if (delay > 1) await sleep(delay - 0.5);
-      while (performance.now() < nextCaptureTime) { /* sub-ms frame alignment */ }
-
-      const image = await pendingCapture;
-      pendingCapture = win.webContents.capturePage();
-      loggedFrameInfo = writeCapturedFrame(image, fd, {
-        width,
-        height,
-        expectedFrameBytes,
-        loggedFrameInfo
-      });
-      frameCount++;
-      nextCaptureTime += frameIntervalMs;
-
-      if (nextCaptureTime < performance.now() - frameIntervalMs * 2) {
-        console.error(`Galcode electron: drift corrected at frame ${frameCount}`);
-        nextCaptureTime = performance.now() + frameIntervalMs;
-      }
-
-      const wallElapsed = Date.now() - captureStart;
-      if (!titleSeen && wallElapsed > 10000 && wallElapsed - lastTitleCheck >= titleCheckIntervalMs) {
-        lastTitleCheck = wallElapsed;
-        const onTitle = await isSelectorVisible(win, ".Title_button, [class*=\"Title_button\"]");
-        if (onTitle) {
-          titleSeen = true;
-          if (args.stopOnTitle) {
-            console.error(`Galcode electron title screen detected at ${Math.round(wallElapsed / 1000)}s; stopping early because --stop-on-title was set`);
-            outputDurationSec = Math.max(0.001, (Date.now() - captureStart) / 1000);
-            break;
-          }
-          console.error(`Galcode electron title screen detected at ${Math.round(wallElapsed / 1000)}s; continuing until requested duration (${duration}s)`);
-        }
-      }
-    }
-  } catch (error) {
-    captureError = error;
-  } finally {
-    fs.closeSync(fd);
-  }
-  if (captureError) {
-    fs.rmSync(rawFile, { force: true });
-    throw captureError;
-  }
+  const {
+    rawFile,
+    frameCount,
+    outputDurationSec,
+    elapsedSec,
+    rawSize
+  } = await captureCompositorFrames(win, { width, height, expectedFrameBytes, fps, duration });
 
   if (frameCount === 0) throw new Error("No frames were captured.");
 
-  const elapsedSec = Math.max(0.001, (Date.now() - captureStart) / 1000);
   const inputFps = frameCount / outputDurationSec;
   const outputFrames = Math.max(1, Math.round(outputDurationSec * fps));
-  const rawSize = fs.statSync(rawFile).size;
   console.error(`Galcode electron captured ${frameCount} real frames in ${elapsedSec.toFixed(2)}s wall time`);
   console.error(`Galcode electron encoding as ${inputFps.toFixed(6)} input fps -> ${fps} output fps (${outputDurationSec.toFixed(2)}s, ${outputFrames} frames)`);
   console.error(`Galcode electron raw file: ${rawSize} bytes (expected ${frameCount * expectedFrameBytes})`);
 
   try {
-    await encodeRawVideo({ ffmpeg, rawFile, out, width, height, inputFps, fps, outputFrames });
+    await encodeRawVideo({ ffmpeg, rawFile, out, width, height, inputFps, fps, outputFrames, outputDurationSec });
   } finally {
     fs.rmSync(rawFile, { force: true });
   }
@@ -176,13 +116,102 @@ async function main() {
   app.exit(1);
 }
 
+async function captureCompositorFrames(win, options) {
+  const { width, height, expectedFrameBytes, fps, duration } = options;
+  const rawFile = path.join(os.tmpdir(), `galcode-electron-${process.pid}-${Date.now()}.bgra`);
+  const fd = fs.openSync(rawFile, "w");
+  const frameIntervalMs = 1000 / fps;
+  const titleCheckIntervalMs = 2000;
+  const captureStart = Date.now();
+  const captureEnd = captureStart + duration * 1000;
+  let frameCount = 0;
+  let outputDurationSec = duration;
+  let loggedFrameInfo = false;
+  let titleSeen = false;
+  let lastTitleCheck = 0;
+  let captureError = null;
+  let recording = true;
+
+  console.error(`Galcode electron compositor capture: ${rawFile}`);
+  const onFrame = (image) => {
+    if (!recording || captureError) return;
+    try {
+      loggedFrameInfo = writeCapturedFrame(image, fd, {
+        width,
+        height,
+        expectedFrameBytes,
+        loggedFrameInfo,
+        source: "compositor"
+      });
+      frameCount++;
+    } catch (error) {
+      captureError = error;
+    }
+  };
+
+  const invalidateTimer = setInterval(() => {
+    try {
+      win.webContents.invalidate();
+    } catch {
+      // The window may already be closing.
+    }
+  }, Math.max(1, Math.round(frameIntervalMs)));
+  invalidateTimer.unref?.();
+
+  try {
+    win.webContents.beginFrameSubscription(false, onFrame);
+    win.webContents.startPainting?.();
+    win.webContents.invalidate();
+
+    while (Date.now() < captureEnd && !captureError) {
+      await sleep(50);
+      const wallElapsed = Date.now() - captureStart;
+      if (!titleSeen && wallElapsed > 10000 && wallElapsed - lastTitleCheck >= titleCheckIntervalMs) {
+        lastTitleCheck = wallElapsed;
+        const onTitle = await isSelectorVisible(win, ".Title_button, [class*=\"Title_button\"]");
+        if (onTitle) {
+          titleSeen = true;
+          if (args.stopOnTitle) {
+            console.error(`Galcode electron title screen detected at ${Math.round(wallElapsed / 1000)}s; stopping early because --stop-on-title was set`);
+            outputDurationSec = Math.max(0.001, wallElapsed / 1000);
+            break;
+          }
+          console.error(`Galcode electron title screen detected at ${Math.round(wallElapsed / 1000)}s; continuing until requested duration (${duration}s)`);
+        }
+      }
+    }
+  } finally {
+    recording = false;
+    clearInterval(invalidateTimer);
+    try {
+      win.webContents.endFrameSubscription();
+    } catch {
+      // Older Electron builds may already have ended the subscription.
+    }
+    fs.closeSync(fd);
+  }
+
+  if (captureError) {
+    fs.rmSync(rawFile, { force: true });
+    throw captureError;
+  }
+
+  const elapsedSec = Math.max(0.001, (Date.now() - captureStart) / 1000);
+  const rawSize = fs.statSync(rawFile).size;
+  const realFps = frameCount / outputDurationSec;
+  if (realFps < fps * 0.9) {
+    console.error(`Galcode electron warning: compositor produced ${realFps.toFixed(2)} fps, below requested ${fps} fps`);
+  }
+  return { rawFile, frameCount, outputDurationSec, elapsedSec, rawSize };
+}
+
 function writeCapturedFrame(image, fd, options) {
-  const { width, height, expectedFrameBytes } = options;
+  const { width, height, expectedFrameBytes, source = "capturePage" } = options;
   const frameImage = image.resize({ width, height, quality: "best" });
   const bitmap = frameImage.toBitmap();
   if (!options.loggedFrameInfo) {
     const size = image.getSize();
-    console.error(`Galcode electron capturePage: ${size.width}x${size.height} -> ${width}x${height}, ${bitmap.length} bytes`);
+    console.error(`Galcode electron ${source}: ${size.width}x${size.height} -> ${width}x${height}, ${bitmap.length} bytes`);
   }
   fs.writeSync(fd, normalizeBitmap(bitmap, expectedFrameBytes));
   return true;
@@ -195,7 +224,8 @@ function normalizeBitmap(bitmap, expectedBytes) {
   return fixed;
 }
 
-function encodeRawVideo({ ffmpeg, rawFile, out, width, height, inputFps, fps, outputFrames }) {
+function encodeRawVideo({ ffmpeg, rawFile, out, width, height, inputFps, fps, outputFrames, outputDurationSec }) {
+  const interpolationFilter = buildFrameInterpolationFilter(inputFps, fps, outputDurationSec);
   const ffmpegArgs = [
     "-y",
     "-f", "rawvideo",
@@ -203,15 +233,22 @@ function encodeRawVideo({ ffmpeg, rawFile, out, width, height, inputFps, fps, ou
     "-s", `${width}x${height}`,
     "-framerate", inputFps.toFixed(6),
     "-i", rawFile,
-    "-an",
-    "-r", String(fps),
+    "-an"
+  ];
+  if (interpolationFilter) {
+    console.error(`Galcode electron frame interpolation: ${interpolationFilter}`);
+    ffmpegArgs.push("-vf", interpolationFilter);
+  } else {
+    ffmpegArgs.push("-r", String(fps));
+  }
+  ffmpegArgs.push(
     "-pix_fmt", "yuv420p",
     "-c:v", "libx264",
     "-preset", "ultrafast",
     "-crf", String(args.crf || 23),
     "-frames:v", String(outputFrames),
     out
-  ];
+  );
   console.error(`Galcode electron ffmpeg: ${ffmpeg} ${ffmpegArgs.map(quoteArg).join(" ")}`);
   return new Promise((resolve, reject) => {
     const child = spawn(ffmpeg, ffmpegArgs, {
@@ -224,6 +261,15 @@ function encodeRawVideo({ ffmpeg, rawFile, out, width, height, inputFps, fps, ou
       else reject(new Error(`${ffmpeg} exited with ${code ?? signal}`));
     });
   });
+}
+
+function buildFrameInterpolationFilter(inputFps, targetFps, outputDurationSec) {
+  const requested = String(args.frameInterpolation || "auto").toLowerCase();
+  if (args.noFrameInterpolation || requested === "off" || requested === "false" || requested === "0") return "";
+  if (inputFps >= targetFps * 0.9 && requested === "auto") return "";
+  const tail = `tpad=stop_mode=clone:stop_duration=1,trim=duration=${Number(outputDurationSec).toFixed(6)},setpts=PTS-STARTPTS`;
+  if (requested === "blend") return `framerate=fps=${targetFps},${tail}`;
+  return `minterpolate=fps=${targetFps}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1,fps=${targetFps},${tail}`;
 }
 
 function quoteArg(value) {
