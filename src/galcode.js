@@ -406,8 +406,9 @@ Recording:
   Default recording FPS is 60. Use --fps <n> to override.
   --duration <seconds> is honored as the target video duration when provided.
   Add --stop-on-title only if you want recording to end early at the title screen.
-  Electron recording uses motion interpolation when offscreen Chromium renders
-  below the requested FPS; pass --no-frame-interpolation to disable it.
+  Electron recording uses lightweight interpolation when offscreen Chromium
+  renders below the requested FPS; pass --no-frame-interpolation to disable it,
+  or --frame-interpolation mci for slower motion-compensated interpolation.
   Recommended capture backend is --capture electron: cross-platform background
   Chromium offscreen rendering. --capture avfoundation is macOS-only visible
   screen capture; --capture screenshot is a deterministic fallback.

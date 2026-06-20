@@ -109,11 +109,11 @@ async function main() {
 
   win.destroy();
   if (outStat && outStat.size > 0) {
-    app.exit(0);
+    process.exit(0);
     return;
   }
   console.error("Galcode electron output file missing or empty");
-  app.exit(1);
+  process.exit(1);
 }
 
 async function captureCompositorFrames(win, options) {
@@ -224,8 +224,43 @@ function normalizeBitmap(bitmap, expectedBytes) {
   return fixed;
 }
 
-function encodeRawVideo({ ffmpeg, rawFile, out, width, height, inputFps, fps, outputFrames, outputDurationSec }) {
-  const interpolationFilter = buildFrameInterpolationFilter(inputFps, fps, outputDurationSec);
+async function encodeRawVideo({ ffmpeg, rawFile, out, width, height, inputFps, fps, outputFrames, outputDurationSec }) {
+  const attempts = buildEncodeAttempts(inputFps, fps, outputDurationSec);
+  let lastError = null;
+  for (let index = 0; index < attempts.length; index += 1) {
+    const attempt = attempts[index];
+    const tmpOut = `${out}.encoding-${process.pid}-${index}.mp4`;
+    removeFile(tmpOut);
+    const ffmpegArgs = buildFfmpegArgs({
+      rawFile,
+      tmpOut,
+      width,
+      height,
+      inputFps,
+      fps,
+      outputFrames,
+      filter: attempt.filter
+    });
+    console.error(`Galcode electron encode attempt ${index + 1}/${attempts.length}: ${attempt.label}`);
+    if (attempt.filter) console.error(`Galcode electron frame interpolation: ${attempt.filter}`);
+    console.error(`Galcode electron ffmpeg: ${ffmpeg} ${ffmpegArgs.map(quoteArg).join(" ")}`);
+    try {
+      await runFfmpeg(ffmpeg, ffmpegArgs);
+      removeFile(out);
+      fs.renameSync(tmpOut, out);
+      return;
+    } catch (error) {
+      lastError = error;
+      removeFile(tmpOut);
+      if (index < attempts.length - 1) {
+        console.error(`Galcode electron encode attempt failed (${error.message}); retrying with fallback.`);
+      }
+    }
+  }
+  throw lastError || new Error("ffmpeg encode failed");
+}
+
+function buildFfmpegArgs({ rawFile, tmpOut, width, height, inputFps, fps, outputFrames, filter }) {
   const ffmpegArgs = [
     "-y",
     "-f", "rawvideo",
@@ -235,21 +270,44 @@ function encodeRawVideo({ ffmpeg, rawFile, out, width, height, inputFps, fps, ou
     "-i", rawFile,
     "-an"
   ];
-  if (interpolationFilter) {
-    console.error(`Galcode electron frame interpolation: ${interpolationFilter}`);
-    ffmpegArgs.push("-vf", interpolationFilter);
-  } else {
-    ffmpegArgs.push("-r", String(fps));
-  }
+  if (filter) ffmpegArgs.push("-vf", filter);
+  else ffmpegArgs.push("-r", String(fps));
   ffmpegArgs.push(
     "-pix_fmt", "yuv420p",
     "-c:v", "libx264",
     "-preset", "ultrafast",
     "-crf", String(args.crf || 23),
     "-frames:v", String(outputFrames),
-    out
+    tmpOut
   );
-  console.error(`Galcode electron ffmpeg: ${ffmpeg} ${ffmpegArgs.map(quoteArg).join(" ")}`);
+  return ffmpegArgs;
+}
+
+function buildEncodeAttempts(inputFps, targetFps, outputDurationSec) {
+  const requested = String(args.frameInterpolation || "auto").toLowerCase();
+  if (args.noFrameInterpolation || requested === "off" || requested === "false" || requested === "0") {
+    return [{ label: "constant fps without interpolation", filter: "" }];
+  }
+  if (inputFps >= targetFps * 0.9 && requested === "auto") {
+    return [{ label: "constant fps", filter: "" }];
+  }
+  const tail = `tpad=stop_mode=clone:stop_duration=1,trim=duration=${Number(outputDurationSec).toFixed(6)},setpts=PTS-STARTPTS`;
+  const blend = `framerate=fps=${targetFps},${tail}`;
+  const mci = `minterpolate=fps=${targetFps}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1,fps=${targetFps},${tail}`;
+  if (requested === "mci" || requested === "minterpolate") {
+    return [
+      { label: "motion-compensated interpolation", filter: mci },
+      { label: "lightweight interpolation fallback", filter: blend },
+      { label: "constant fps fallback", filter: "" }
+    ];
+  }
+  return [
+    { label: "lightweight interpolation", filter: blend },
+    { label: "constant fps fallback", filter: "" }
+  ];
+}
+
+function runFfmpeg(ffmpeg, ffmpegArgs) {
   return new Promise((resolve, reject) => {
     const child = spawn(ffmpeg, ffmpegArgs, {
       stdio: "inherit",
@@ -263,13 +321,12 @@ function encodeRawVideo({ ffmpeg, rawFile, out, width, height, inputFps, fps, ou
   });
 }
 
-function buildFrameInterpolationFilter(inputFps, targetFps, outputDurationSec) {
-  const requested = String(args.frameInterpolation || "auto").toLowerCase();
-  if (args.noFrameInterpolation || requested === "off" || requested === "false" || requested === "0") return "";
-  if (inputFps >= targetFps * 0.9 && requested === "auto") return "";
-  const tail = `tpad=stop_mode=clone:stop_duration=1,trim=duration=${Number(outputDurationSec).toFixed(6)},setpts=PTS-STARTPTS`;
-  if (requested === "blend") return `framerate=fps=${targetFps},${tail}`;
-  return `minterpolate=fps=${targetFps}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1,fps=${targetFps},${tail}`;
+function removeFile(file) {
+  try {
+    fs.rmSync(file, { force: true });
+  } catch {
+    // Best-effort cleanup only.
+  }
 }
 
 function quoteArg(value) {
@@ -471,5 +528,5 @@ function parseArgs(argv) {
 
 function fail(error) {
   console.error(error?.stack || error?.message || String(error));
-  app.exit(1);
+  process.exit(1);
 }
