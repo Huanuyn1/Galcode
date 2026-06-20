@@ -4,9 +4,19 @@ AI 驱动的 WebGAL 二创 CLI。输入一句脑洞，Galcode 会根据本地 My
 
 `main` 分支现在是 Windows / macOS / Linux 通用版。第一次使用建议先看 Windows 新手手册：[小白看这里](docs/小白看这里.md)。
 
-## 一键开始
+## Windows 先看这里
 
-### Windows
+Windows 新手优先使用仓库里的 `release/Galcode-windows.exe`，或者从发布包里下载同名文件，然后直接双击。
+
+这个 exe 会自动下载/校验 Galcode 项目文件，准备便携 Node.js，安装 npm / Electron / WebGAL 依赖，并打开图形界面。第一次运行需要联网；录制 `final.mp4` 仍然需要电脑里能找到 FFmpeg。
+
+如果双击失败，优先看 exe 旁边的 `Galcode-launcher.log`；没有的话再看 `%LOCALAPPDATA%\Galcode\logs\Galcode-launcher.log`。
+
+详细的新手路线见：[小白看这里](docs/小白看这里.md)。
+
+### Windows 源码备用路线
+
+只有在你想改代码、或者 exe 无法使用时，才建议从源码启动：
 
 ```powershell
 git clone https://github.com/Huanuyn1/Galcode.git
@@ -36,7 +46,7 @@ chmod +x install.sh start.sh galcode
 
 ## 双击版
 
-开发者打包后，`dist/native/` 会出现可双击的原生 launcher：
+仓库的 `release/` 目录或发布包里会放可双击的原生 launcher；开发者本地打包时，产物也会出现在 `dist/native/`：
 
 | 平台 | 产物 |
 | --- | --- |

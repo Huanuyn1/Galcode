@@ -16,14 +16,20 @@ const REQUIRED_PROJECT_FILES = [
   path.join("scripts", "galcode-bootstrap.mjs"),
   path.join("bin", "galcode.js"),
   path.join("src", "galcode.js"),
+  path.join("src", "electron-recorder.cjs"),
   path.join("src", "gui", "main.cjs"),
   path.join("src", "gui", "preload.cjs"),
-  path.join("src", "gui", "index.html")
+  path.join("src", "gui", "index.html"),
+  path.join("vendor", "webgal-mygo", "packages", "webgal", "public", "lib", "live2d.min.js"),
+  path.join("vendor", "webgal-mygo", "packages", "webgal", "public", "lib", "live2dcubismcore.min.js")
 ];
 const REQUIRED_PROJECT_TEXT = [
   [path.join("scripts", "galcode-bootstrap.mjs"), "getNpmInvocation"],
   [path.join("scripts", "galcode-bootstrap.mjs"), "extractZipWithNode"],
-  [path.join("src", "galcode.js"), "npmInvocation"]
+  [path.join("scripts", "galcode-bootstrap.mjs"), "replaceDirectorySafely"],
+  [path.join("scripts", "galcode-bootstrap.mjs"), "preserveLive2DRuntimeFiles"],
+  [path.join("src", "galcode.js"), "npmInvocation"],
+  [path.join("src", "electron-recorder.cjs"), "startFfmpegEncoder"]
 ];
 const PRESERVED_INSTALL_PATHS = [
   ".galcode",
@@ -205,8 +211,7 @@ async function installProjectFiles(installRoot) {
     const extractedRoot = await findExtractedProjectRoot(extractRoot);
     if (!extractedRoot) throw new Error(`Downloaded Galcode archive did not contain a usable project folder. Extracted entries: ${await describeDirectory(extractRoot)}`);
 
-    await fsp.rm(installRoot, { recursive: true, force: true });
-    await fsp.rename(extractedRoot, installRoot);
+    await replaceDirectorySafely(extractedRoot, installRoot);
     await restorePreservedInstall(preserveRoot, installRoot);
     console.log("Galcode project files are ready.");
   } finally {
@@ -214,6 +219,35 @@ async function installProjectFiles(installRoot) {
     await fsp.rm(extractRoot, { recursive: true, force: true }).catch(() => {});
     await fsp.rm(preserveRoot, { recursive: true, force: true }).catch(() => {});
   }
+}
+
+async function replaceDirectorySafely(source, target) {
+  await fsp.mkdir(path.dirname(target), { recursive: true });
+  await fsp.rm(target, { recursive: true, force: true });
+  try {
+    await fsp.rename(source, target);
+    return;
+  } catch (error) {
+    if (!isMoveFallbackError(error)) throw error;
+    console.warn(`Directory rename failed (${error.code}); copying files instead.`);
+  }
+
+  await sleep(500);
+  try {
+    await fsp.rename(source, target);
+    return;
+  } catch (error) {
+    if (!isMoveFallbackError(error)) throw error;
+    console.warn(`Directory rename retry failed (${error.code}); using recursive copy.`);
+  }
+
+  await fsp.rm(target, { recursive: true, force: true }).catch(() => {});
+  await fsp.cp(source, target, { recursive: true, force: true });
+  await fsp.rm(source, { recursive: true, force: true }).catch(() => {});
+}
+
+function isMoveFallbackError(error) {
+  return ["EXDEV", "EPERM", "EACCES", "EBUSY"].includes(error?.code);
 }
 
 async function findExtractedProjectRoot(extractRoot) {
@@ -806,6 +840,10 @@ function formatLogArg(value) {
   } catch {
     return String(value);
   }
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function timestampForFile() {

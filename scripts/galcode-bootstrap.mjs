@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const WEBGAL_DIR = path.join(ROOT_DIR, "vendor", "webgal-mygo");
 const WEBGAL_ZIP = "https://github.com/boomwwww/webgal-mygo/archive/refs/heads/main.zip";
+const LIVE2D_RUNTIME_FILES = ["live2d.min.js", "live2dcubismcore.min.js", "LIVE2D_RUNTIME_SOURCES.md"];
 const isWindows = process.platform === "win32";
 const isMac = process.platform === "darwin";
 const isLinux = process.platform === "linux";
@@ -173,7 +174,9 @@ async function ensureWebGALEngine(flags) {
   await fs.mkdir(path.join(ROOT_DIR, "vendor"), { recursive: true });
   const zipPath = path.join(os.tmpdir(), `galcode-webgal-${Date.now()}.zip`);
   const extractRoot = path.join(os.tmpdir(), `galcode-webgal-extract-${Date.now()}`);
+  let preservedLive2D = "";
   try {
+    preservedLive2D = await preserveLive2DRuntimeFiles();
     await fs.mkdir(extractRoot, { recursive: true });
     await downloadFile(WEBGAL_ZIP, zipPath);
     console.log(`WebGAL archive: ${await describeFile(zipPath)}`);
@@ -181,11 +184,13 @@ async function ensureWebGALEngine(flags) {
     console.log(`WebGAL archive extracted: ${await describeDirectory(extractRoot)}`);
     const extractedRoot = await findExtractedWebGALRoot(extractRoot);
     if (!extractedRoot) throw new Error(`Downloaded WebGAL archive did not contain a usable WebGAL engine. Extracted entries: ${await describeDirectory(extractRoot)}`);
-    await fs.rm(WEBGAL_DIR, { recursive: true, force: true });
-    await fs.rename(extractedRoot, WEBGAL_DIR);
+    await replaceDirectorySafely(extractedRoot, WEBGAL_DIR);
+    await restoreLive2DRuntimeFiles(preservedLive2D);
+    preservedLive2D = "";
   } finally {
     await fs.rm(zipPath, { force: true }).catch(() => {});
     await fs.rm(extractRoot, { recursive: true, force: true }).catch(() => {});
+    if (preservedLive2D) await fs.rm(preservedLive2D, { recursive: true, force: true }).catch(() => {});
   }
 }
 
@@ -208,6 +213,66 @@ async function findExtractedWebGALRoot(extractRoot) {
     }
   }
   return "";
+}
+
+async function replaceDirectorySafely(source, target) {
+  await fs.mkdir(path.dirname(target), { recursive: true });
+  await fs.rm(target, { recursive: true, force: true });
+  try {
+    await fs.rename(source, target);
+    return;
+  } catch (error) {
+    if (!isMoveFallbackError(error)) throw error;
+    console.warn(`Directory rename failed (${error.code}); copying files instead.`);
+  }
+
+  await sleep(500);
+  try {
+    await fs.rename(source, target);
+    return;
+  } catch (error) {
+    if (!isMoveFallbackError(error)) throw error;
+    console.warn(`Directory rename retry failed (${error.code}); using recursive copy.`);
+  }
+
+  await fs.rm(target, { recursive: true, force: true }).catch(() => {});
+  await fs.cp(source, target, { recursive: true, force: true });
+  await fs.rm(source, { recursive: true, force: true }).catch(() => {});
+}
+
+function isMoveFallbackError(error) {
+  return ["EXDEV", "EPERM", "EACCES", "EBUSY"].includes(error?.code);
+}
+
+async function preserveLive2DRuntimeFiles() {
+  const sourceDir = path.join(WEBGAL_DIR, "packages", "webgal", "public", "lib");
+  const preserveDir = path.join(os.tmpdir(), `galcode-live2d-runtime-${Date.now()}`);
+  let copied = 0;
+  for (const file of LIVE2D_RUNTIME_FILES) {
+    const source = path.join(sourceDir, file);
+    if (!fssync.existsSync(source)) continue;
+    await fs.mkdir(preserveDir, { recursive: true });
+    await fs.copyFile(source, path.join(preserveDir, file));
+    copied += 1;
+  }
+  if (copied > 0) {
+    console.log(`Preserved Live2D runtime files: ${copied}`);
+    return preserveDir;
+  }
+  return "";
+}
+
+async function restoreLive2DRuntimeFiles(preserveDir) {
+  if (!preserveDir) return;
+  const targetDir = path.join(WEBGAL_DIR, "packages", "webgal", "public", "lib");
+  await fs.mkdir(targetDir, { recursive: true });
+  for (const file of LIVE2D_RUNTIME_FILES) {
+    const source = path.join(preserveDir, file);
+    if (!fssync.existsSync(source)) continue;
+    await fs.copyFile(source, path.join(targetDir, file));
+  }
+  console.log(`Restored Live2D runtime into ${targetDir}`);
+  await fs.rm(preserveDir, { recursive: true, force: true }).catch(() => {});
 }
 
 async function ensureWebGALDependencies(flags) {
@@ -715,6 +780,10 @@ function shellQuote(value) {
 
 function psQuote(value) {
   return `'${String(value).replace(/'/g, "''")}'`;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function teeConsoleToLog(file) {

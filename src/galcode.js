@@ -881,14 +881,22 @@ async function downloadAssetsCommand(flags) {
 
   console.log(`Downloaded: ${config.zip}`);
   console.log(`Extracting to ${root}`);
-  if (fssync.existsSync(config.extractedDir)) {
-    await fs.rm(config.extractedDir, { recursive: true, force: true });
+  let preservedLive2D = "";
+  try {
+    if (target === "webgal-mygo") preservedLive2D = await preserveLive2DRuntimeFiles(config.finalDir);
+    if (fssync.existsSync(config.extractedDir)) {
+      await fs.rm(config.extractedDir, { recursive: true, force: true });
+    }
+    if (fssync.existsSync(config.finalDir)) {
+      await fs.rm(config.finalDir, { recursive: true, force: true });
+    }
+    await extractZip(config.zip, root);
+    await replaceDirectorySafely(config.extractedDir, config.finalDir);
+    await restoreLive2DRuntimeFiles(preservedLive2D, config.finalDir);
+    preservedLive2D = "";
+  } finally {
+    if (preservedLive2D) await fs.rm(preservedLive2D, { recursive: true, force: true }).catch(() => {});
   }
-  if (fssync.existsSync(config.finalDir)) {
-    await fs.rm(config.finalDir, { recursive: true, force: true });
-  }
-  await extractZip(config.zip, root);
-  await fs.rename(config.extractedDir, config.finalDir);
   console.log(`Ready: ${config.finalDir}`);
 }
 
@@ -2794,7 +2802,7 @@ function runRecorderProcess(command, args, options = {}) {
       // Check for partial success regardless of exit code
       if (stat?.size > 0) {
         if (code !== 0 && !quietWithOutput) {
-          console.warn(`Recorder exited with ${code ?? signal}, but output video was written: ${outFile}`);
+          console.warn(`Recorder exited with ${formatExitStatus(code, signal)}, but output video was written: ${outFile}`);
         }
         return resolve();
       }
@@ -2807,9 +2815,15 @@ function runRecorderProcess(command, args, options = {}) {
         return reject(new Error(`Recorder exited successfully but did not write output: ${outFile}`));
       }
       if (stderr) console.error(stderr.trim());
-      reject(new Error(`${command} exited with ${code ?? signal}`));
+      reject(new Error(`${command} exited with ${formatExitStatus(code, signal)}`));
     });
   });
+}
+
+function formatExitStatus(code, signal) {
+  if (code === null || code === undefined) return String(signal || "unknown");
+  if (code > 0x7fffffff) return `${code} (${code - 0x100000000})`;
+  return String(code);
 }
 
 async function recordWithAVFoundation(browser, url, { width, height, duration, fps, out, flags }) {
@@ -3205,6 +3219,66 @@ function collectOutput(command, args, options = {}) {
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function replaceDirectorySafely(source, target) {
+  await fs.mkdir(path.dirname(target), { recursive: true });
+  await fs.rm(target, { recursive: true, force: true });
+  try {
+    await fs.rename(source, target);
+    return;
+  } catch (error) {
+    if (!isMoveFallbackError(error)) throw error;
+    console.warn(`Directory rename failed (${error.code}); copying files instead.`);
+  }
+
+  await sleep(500);
+  try {
+    await fs.rename(source, target);
+    return;
+  } catch (error) {
+    if (!isMoveFallbackError(error)) throw error;
+    console.warn(`Directory rename retry failed (${error.code}); using recursive copy.`);
+  }
+
+  await fs.rm(target, { recursive: true, force: true }).catch(() => {});
+  await fs.cp(source, target, { recursive: true, force: true });
+  await fs.rm(source, { recursive: true, force: true }).catch(() => {});
+}
+
+function isMoveFallbackError(error) {
+  return ["EXDEV", "EPERM", "EACCES", "EBUSY"].includes(error?.code);
+}
+
+async function preserveLive2DRuntimeFiles(webgalRoot) {
+  const sourceDir = path.join(webgalRoot, "packages", "webgal", "public", "lib");
+  const preserveDir = path.join(os.tmpdir(), `galcode-live2d-runtime-${Date.now()}`);
+  let copied = 0;
+  for (const file of [...LIVE2D_RUNTIME_FILES, "LIVE2D_RUNTIME_SOURCES.md"]) {
+    const source = path.join(sourceDir, file);
+    if (!fssync.existsSync(source)) continue;
+    await fs.mkdir(preserveDir, { recursive: true });
+    await fs.copyFile(source, path.join(preserveDir, file));
+    copied += 1;
+  }
+  if (copied > 0) {
+    console.log(`Preserved Live2D runtime files: ${copied}`);
+    return preserveDir;
+  }
+  return "";
+}
+
+async function restoreLive2DRuntimeFiles(preserveDir, webgalRoot) {
+  if (!preserveDir) return;
+  const targetDir = path.join(webgalRoot, "packages", "webgal", "public", "lib");
+  await fs.mkdir(targetDir, { recursive: true });
+  for (const file of [...LIVE2D_RUNTIME_FILES, "LIVE2D_RUNTIME_SOURCES.md"]) {
+    const source = path.join(preserveDir, file);
+    if (!fssync.existsSync(source)) continue;
+    await fs.copyFile(source, path.join(targetDir, file));
+  }
+  console.log(`Restored Live2D runtime into ${targetDir}`);
+  await fs.rm(preserveDir, { recursive: true, force: true }).catch(() => {});
 }
 
 async function ensureDir(dir) {

@@ -2,11 +2,12 @@
 "use strict";
 
 const { app, BrowserWindow } = require("electron");
+const { spawn } = require("node:child_process");
 const fs = require("node:fs");
-const os = require("node:os");
 const path = require("node:path");
 
 const args = parseArgs(process.argv.slice(2));
+const isWindows = process.platform === "win32";
 const width = Number(args.width || 1920);
 const height = Number(args.height || 1080);
 const fps = Number(args.fps || 60);
@@ -18,11 +19,30 @@ const startDelay = Number(args.startDelay || 1500);
 
 if (!url) fail("Missing --url");
 
+process.on("uncaughtException", fail);
+process.on("unhandledRejection", fail);
+app.on("render-process-gone", (_event, _webContents, details) => {
+  console.error(`Galcode electron render process gone: ${details.reason} (${details.exitCode})`);
+});
+app.on("child-process-gone", (_event, details) => {
+  console.error(`Galcode electron child process gone: ${details.type} ${details.reason} (${details.exitCode})`);
+});
+app.on("gpu-process-crashed", (_event, killed) => {
+  console.error(`Galcode electron GPU process crashed; killed=${killed}`);
+});
+
 app.commandLine.appendSwitch("disable-background-timer-throttling");
 app.commandLine.appendSwitch("disable-renderer-backgrounding");
 app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 app.commandLine.appendSwitch("force-device-scale-factor", "1");
+app.commandLine.appendSwitch("enable-webgl");
+app.commandLine.appendSwitch("ignore-gpu-blocklist");
+app.commandLine.appendSwitch("enable-gpu-rasterization");
+if (isWindows) {
+  app.commandLine.appendSwitch("enable-unsafe-swiftshader");
+  app.commandLine.appendSwitch("disable-features", "CalculateNativeWinOcclusion");
+}
 
 app.whenReady().then(main).catch(fail);
 
@@ -33,6 +53,8 @@ async function main() {
     show: false,
     width,
     height,
+    backgroundColor: "#000000",
+    paintWhenInitiallyHidden: true,
     useContentSize: true,
     webPreferences: {
       offscreen: true,
@@ -44,6 +66,12 @@ async function main() {
 
   win.webContents.setFrameRate(fps);
   win.webContents.audioMuted = true;
+  win.webContents.on("did-fail-load", (_event, code, description, failedUrl) => {
+    console.error(`Galcode electron failed to load ${failedUrl}: ${code} ${description}`);
+  });
+  win.webContents.on("console-message", (_event, level, message, line, sourceId) => {
+    if (level >= 2) console.error(`WebGAL console: ${message} (${sourceId}:${line})`);
+  });
 
   const expectedFrameBytes = width * height * 4;
 
@@ -54,130 +82,72 @@ async function main() {
 
   const captureStart = Date.now();
 
-  // === capturePage pipeline ===
-  // Start first capture immediately; at each tick we await it,
-  // write the bitmap, then fire the next capture. This pipelines
-  // the async capturePage call so we never wait for it cold.
-  const rawFile = path.join(os.tmpdir(), `galcode-electron-${process.pid}.bgra`);
-  const fd = fs.openSync(rawFile, "w");
-
+  const encoder = startFfmpegEncoder({ ffmpeg, out, width, height, fps });
   let frameCount = 0;
   let gameEnded = false;
   let lastTitleCheck = 0;
-  const captureEnd = captureStart + duration * 1000;
+  const targetFrames = Math.max(1, Math.round(duration * fps));
   const titleCheckIntervalMs = 2000;
   const frameIntervalMs = 1000 / fps;
-
-  // Prime the pipeline
-  let pendingCapture = win.webContents.capturePage();
   let loggedFrameInfo = false;
+
+  console.error(`Galcode electron recording: ${width}x${height} @ ${fps} fps, ${duration}s -> ${out}`);
 
   try {
     let nextCaptureTime = performance.now();
 
-    while (Date.now() < captureEnd && !gameEnded) {
-      // Wait until next tick deadline
+    while (frameCount < targetFrames && !gameEnded) {
       const delay = nextCaptureTime - performance.now();
-      if (delay > 1) await sleep(delay - 0.5);
-      while (performance.now() < nextCaptureTime) { /* spin for sub-ms precision */ }
-
-      // Resolve the pre-fetched capture
-      const image = await pendingCapture;
-
-      // Fire next capture immediately (pipelining hides latency)
-      pendingCapture = win.webContents.capturePage();
-
-      // Convert to bitmap and write
-      const frameImage = image.resize({ width, height, quality: "best" });
-      const bitmap = frameImage.toBitmap();
-
-      if (!loggedFrameInfo) {
-        console.error(`Galcode electron capturePage: ${image.getSize().width}x${image.getSize().height} -> ${width}x${height}, ${bitmap.length} bytes`);
-        loggedFrameInfo = true;
-      }
-
-      if (bitmap.length !== expectedFrameBytes) {
-        const fixed = Buffer.alloc(expectedFrameBytes);
-        bitmap.copy(fixed, 0, 0, Math.min(bitmap.length, expectedFrameBytes));
-        fs.writeSync(fd, fixed);
-      } else {
-        fs.writeSync(fd, bitmap);
-      }
+      if (delay > 0) await sleep(delay);
+      loggedFrameInfo = await captureFrame(win, encoder, {
+        width,
+        height,
+        expectedFrameBytes,
+        loggedFrameInfo
+      });
       frameCount++;
       nextCaptureTime += frameIntervalMs;
 
-      // Drift correction
-      if (nextCaptureTime < performance.now() - frameIntervalMs * 2) {
-        console.error(`Galcode electron: drift corrected at frame ${frameCount}`);
-        nextCaptureTime = performance.now() + frameIntervalMs;
+      if (nextCaptureTime < performance.now() - frameIntervalMs * 5) {
+        console.error(`Galcode electron: capture is behind at frame ${frameCount}; continuing without catch-up burst`);
+        nextCaptureTime = performance.now();
       }
 
-      // Game-end detection (every 2s after 10s)
       const wallElapsed = Date.now() - captureStart;
       if (!gameEnded && wallElapsed > 10000 && wallElapsed - lastTitleCheck >= titleCheckIntervalMs) {
         lastTitleCheck = wallElapsed;
-        const onTitle = await win.webContents.executeJavaScript(`
-          (() => {
-            const buttons = document.querySelectorAll('.Title_button, [class*="Title_button"]');
-            return Array.from(buttons).some(el => {
-              const rect = el.getBoundingClientRect();
-              return rect.width > 0 && rect.height > 0;
-            });
-          })()
-        `, true).catch(() => false);
+        const onTitle = await isSelectorVisible(win, ".Title_button, [class*=\"Title_button\"]");
         if (onTitle) {
           console.error(`Galcode electron game ended at ${Math.round(wallElapsed / 1000)}s (frame ${frameCount})`);
           gameEnded = true;
-          const titleEnd = Date.now() + 3000;
-          while (Date.now() < titleEnd) {
+          const tailFrames = Math.round(3 * fps);
+          for (let i = 0; i < tailFrames; i += 1) {
             const td = nextCaptureTime - performance.now();
-            if (td > 1) await sleep(td - 0.5);
-            while (performance.now() < nextCaptureTime) { /* spin */ }
-            const img = await pendingCapture;
-            pendingCapture = win.webContents.capturePage();
-            const fImg = img.resize({ width, height, quality: "best" });
-            const bmp = fImg.toBitmap();
-            if (bmp.length !== expectedFrameBytes) {
-              const fix = Buffer.alloc(expectedFrameBytes);
-              bmp.copy(fix, 0, 0, Math.min(bmp.length, expectedFrameBytes));
-              fs.writeSync(fd, fix);
-            } else {
-              fs.writeSync(fd, bmp);
-            }
+            if (td > 0) await sleep(td);
+            loggedFrameInfo = await captureFrame(win, encoder, {
+              width,
+              height,
+              expectedFrameBytes,
+              loggedFrameInfo
+            });
             frameCount++;
             nextCaptureTime += frameIntervalMs;
-            if (nextCaptureTime < performance.now() - frameIntervalMs * 2) {
-              nextCaptureTime = performance.now() + frameIntervalMs;
-            }
           }
           break;
         }
       }
     }
-  } finally {
-    fs.closeSync(fd);
+  } catch (error) {
+    encoder.child.kill("SIGTERM");
+    throw error;
   }
+
+  if (frameCount === 0) throw new Error("No frames were captured.");
+  encoder.stdin.end();
+  await encoder.done;
 
   const elapsedSec = Math.max(0.001, (Date.now() - captureStart) / 1000);
-  const inputFps = frameCount / elapsedSec;
-  console.error(`Galcode electron captured ${frameCount} frames in ${elapsedSec.toFixed(2)}s (${inputFps.toFixed(2)} fps, target ${fps} fps)`);
-
-  const rawSize = fs.statSync(rawFile).size;
-  console.error(`Galcode electron raw file: ${rawSize} bytes (expected ${frameCount * expectedFrameBytes})`);
-
-  // === Encode with ffmpeg ===
-  // capturePage gives us the true screen content at each tick — no more
-  // minterpolate needed. Simple fps filter for uniform output.
-  const { execSync } = require("node:child_process");
-  const ffmpegCmd = `${ffmpeg} -y -f rawvideo -pix_fmt bgra -s ${width}x${height} -framerate ${inputFps.toFixed(6)} -i ${rawFile} -r ${fps} -pix_fmt yuv420p -c:v libx264 -preset ultrafast -crf 23 ${out}`;
-  console.error(`Galcode electron ffmpeg: ${ffmpegCmd}`);
-  try {
-    execSync(ffmpegCmd, { stdio: "inherit", timeout: Math.max(120000, duration * 5000) });
-  } catch (ffmpegErr) {
-    console.error(`Galcode electron ffmpeg failed: ${ffmpegErr.message}`);
-  }
-
-  fs.rmSync(rawFile, { force: true });
+  console.error(`Galcode electron captured ${frameCount} frames in ${elapsedSec.toFixed(2)}s (target ${fps} fps)`);
 
   const outStat = fs.statSync(out, { throwIfNoEntry: false });
   console.error(`Galcode electron output: ${out} (${outStat ? outStat.size + " bytes" : "MISSING"})`);
@@ -191,21 +161,104 @@ async function main() {
   app.exit(1);
 }
 
+async function captureFrame(win, encoder, options) {
+  const { width, height, expectedFrameBytes } = options;
+  const image = await win.webContents.capturePage();
+  const frameImage = image.resize({ width, height, quality: "best" });
+  const bitmap = frameImage.toBitmap();
+  if (!options.loggedFrameInfo) {
+    const size = image.getSize();
+    console.error(`Galcode electron capturePage: ${size.width}x${size.height} -> ${width}x${height}, ${bitmap.length} bytes`);
+  }
+  await writeFrame(encoder.stdin, normalizeBitmap(bitmap, expectedFrameBytes));
+  return true;
+}
+
+function normalizeBitmap(bitmap, expectedBytes) {
+  if (bitmap.length === expectedBytes) return bitmap;
+  const fixed = Buffer.alloc(expectedBytes);
+  bitmap.copy(fixed, 0, 0, Math.min(bitmap.length, expectedBytes));
+  return fixed;
+}
+
+function startFfmpegEncoder({ ffmpeg, out, width, height, fps }) {
+  const ffmpegArgs = [
+    "-y",
+    "-f", "rawvideo",
+    "-pix_fmt", "bgra",
+    "-s", `${width}x${height}`,
+    "-framerate", String(fps),
+    "-i", "pipe:0",
+    "-an",
+    "-r", String(fps),
+    "-pix_fmt", "yuv420p",
+    "-c:v", "libx264",
+    "-preset", "ultrafast",
+    "-crf", String(args.crf || 23),
+    out
+  ];
+  console.error(`Galcode electron ffmpeg: ${ffmpeg} ${ffmpegArgs.map(quoteArg).join(" ")}`);
+  const child = spawn(ffmpeg, ffmpegArgs, {
+    stdio: ["pipe", "ignore", "inherit"],
+    windowsHide: true
+  });
+  const done = new Promise((resolve, reject) => {
+    child.on("error", reject);
+    child.on("exit", (code, signal) => {
+      if (code === 0) resolve();
+      else reject(new Error(`${ffmpeg} exited with ${code ?? signal}`));
+    });
+  });
+  return { child, stdin: child.stdin, done };
+}
+
+async function writeFrame(stream, frame) {
+  if (stream.destroyed) throw new Error("ffmpeg stdin closed before recording finished.");
+  if (stream.write(frame)) return;
+  await new Promise((resolve, reject) => {
+    const cleanup = () => {
+      stream.off("drain", onDrain);
+      stream.off("error", onError);
+    };
+    const onDrain = () => {
+      cleanup();
+      resolve();
+    };
+    const onError = (error) => {
+      cleanup();
+      reject(error);
+    };
+    stream.once("drain", onDrain);
+    stream.once("error", onError);
+  });
+}
+
+function quoteArg(value) {
+  const text = String(value);
+  return /\s/.test(text) ? `"${text.replace(/"/g, '\\"')}"` : text;
+}
+
 async function autoplay(win) {
   const wc = win.webContents;
   await ensureLanguageSelected(win);
   await click(wc, Math.floor(width / 2), Math.floor(height / 2));
-  await waitForSelector(win, ".Title_button, [class*=\"Title_button\"]", 30000);
-  await sleep(500);
-  wc.sendInputEvent({ type: "keyDown", keyCode: "Space" });
-  wc.sendInputEvent({ type: "keyUp", keyCode: "Space" });
-  await sleep(300);
-  const startButton = await getTitleStartButtonCenter(win);
-  if (startButton) await click(wc, startButton.x, startButton.y);
-  else if (!(await clickElementByText(win, /开始游戏|START/i))) await click(wc, Math.floor(width * 0.095), Math.floor(height * 0.26));
-  await sleep(300);
-  await click(wc, Math.floor(width * 0.095), Math.floor(height * 0.26));
-  await waitForSelector(win, "#pixiCanvas", 30000);
+
+  await waitForAnySelector(win, [".Title_button, [class*=\"Title_button\"]", "#pixiCanvas", "canvas"], 30000);
+  if (await isSelectorVisible(win, ".Title_button, [class*=\"Title_button\"]")) {
+    await sleep(500);
+    wc.sendInputEvent({ type: "keyDown", keyCode: "Space" });
+    wc.sendInputEvent({ type: "keyUp", keyCode: "Space" });
+    await sleep(300);
+    const startButton = await getTitleStartButtonCenter(win);
+    if (startButton) await click(wc, startButton.x, startButton.y);
+    else if (!(await clickElementByText(win, /开始游戏|继续游戏|START|CONTINUE/i))) await click(wc, Math.floor(width * 0.095), Math.floor(height * 0.26));
+    await sleep(300);
+    if (await isSelectorVisible(win, ".Title_button, [class*=\"Title_button\"]")) {
+      await click(wc, Math.floor(width * 0.095), Math.floor(height * 0.26));
+    }
+  }
+
+  await waitForAnySelector(win, ["#pixiCanvas", "canvas"], 30000);
   await sleep(Number(args.sceneDelay || 8000));
 
   await wc.executeJavaScript(`
@@ -227,17 +280,31 @@ async function autoplay(win) {
 }
 
 async function ensureLanguageSelected(win) {
-  const selected = await win.webContents.executeJavaScript(`
+  const wc = win.webContents;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const text = await getBodyText(win);
+    if (!/LANGUAGE SELECT|语言选择|Language Select/i.test(text)) return;
+    const clicked = await clickElementByText(win, /简体中文|简体|中文|Chinese|CHS|日本語|English/i);
+    if (!clicked) await click(wc, Math.floor(width * 0.11), Math.floor(height * 0.55));
+    console.error("Galcode electron: selected language from WebGAL language screen");
+    await sleep(1000);
+  }
+
+  const forced = await wc.executeJavaScript(`
 (() => {
-  const text = document.body?.innerText || '';
-  if (window.localStorage.getItem('lang')) return false;
-  window.localStorage.setItem('lang', '0');
-  if (/LANGUAGE SELECT/i.test(text)) window.location.reload();
-  return true;
+  try {
+    localStorage.setItem('lang', localStorage.getItem('lang') || '0');
+    localStorage.setItem('language', localStorage.getItem('language') || 'zhCn');
+    localStorage.setItem('i18nextLng', localStorage.getItem('i18nextLng') || 'zh-CN');
+    location.reload();
+    return true;
+  } catch (_) {
+    return false;
+  }
 })()
 `, true).catch(() => false);
-  if (selected) {
-    console.error("Galcode electron: selected default WebGAL language");
+  if (forced) {
+    console.error("Galcode electron: forced default WebGAL language in localStorage");
     await sleep(1500);
   }
 }
@@ -249,21 +316,48 @@ async function click(wc, x, y) {
 }
 
 async function waitForSelector(win, selector, timeoutMs) {
+  await waitForAnySelector(win, [selector], timeoutMs);
+}
+
+async function waitForAnySelector(win, selectors, timeoutMs) {
   const started = Date.now();
-  const quotedSelector = JSON.stringify(selector);
   while (Date.now() - started < timeoutMs) {
-    const found = await win.webContents.executeJavaScript(`
+    for (const selector of selectors) {
+      if (await isSelectorVisible(win, selector)) return selector;
+    }
+    await sleep(250);
+  }
+  await saveDebugCapture(win, "timeout");
+  const body = await getBodyText(win);
+  throw new Error(`Timed out waiting for selector: ${selectors.join(" or ")}. Body: ${body.slice(0, 500).replace(/\s+/g, " ")}`);
+}
+
+async function isSelectorVisible(win, selector) {
+  const quotedSelector = JSON.stringify(selector);
+  return Boolean(await win.webContents.executeJavaScript(`
 (() => {
   const element = document.querySelector(${quotedSelector});
   if (!element) return false;
   const rect = element.getBoundingClientRect();
   return rect.width > 0 && rect.height > 0;
 })()
-`, true).catch(() => false);
-    if (found) return;
-    await sleep(250);
+`, true).catch(() => false));
+}
+
+async function getBodyText(win) {
+  return await win.webContents.executeJavaScript("document.body?.innerText || ''", true).catch(() => "");
+}
+
+async function saveDebugCapture(win, reason) {
+  try {
+    const image = await win.webContents.capturePage();
+    const file = path.join(path.dirname(out), `electron-recorder-${reason.replace(/[^a-z0-9-]+/gi, "-")}.png`);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, image.toPNG());
+    console.error(`Galcode electron debug capture: ${file}`);
+  } catch (error) {
+    console.error(`Galcode electron debug capture failed: ${error.message}`);
   }
-  fail(`Timed out waiting for selector: ${selector}`);
 }
 
 async function clickElementByText(win, pattern) {
