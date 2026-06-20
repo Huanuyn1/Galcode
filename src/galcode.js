@@ -406,9 +406,6 @@ Recording:
   Default recording FPS is 60. Use --fps <n> to override.
   --duration <seconds> is honored as the target video duration when provided.
   Add --stop-on-title only if you want recording to end early at the title screen.
-  Electron recording uses lightweight interpolation when offscreen Chromium
-  renders below the requested FPS; pass --no-frame-interpolation to disable it,
-  or --frame-interpolation mci for slower motion-compensated interpolation.
   Recommended capture backend is --capture electron: cross-platform background
   Chromium offscreen rendering. --capture avfoundation is macOS-only visible
   screen capture; --capture screenshot is a deterministic fallback.
@@ -2809,9 +2806,7 @@ async function recordWithElectronOffscreen(url, { width, height, duration, fps, 
     "--scene-delay", String(flags.sceneDelay || 8000),
     "--click-interval", String(flags.clickInterval || 3000),
     ...(flags.noAutoplay ? ["--no-autoplay"] : []),
-    ...(flags.stopOnTitle ? ["--stop-on-title"] : []),
-    ...(flags.noFrameInterpolation ? ["--no-frame-interpolation"] : []),
-    ...(flags.frameInterpolation ? ["--frame-interpolation", String(flags.frameInterpolation)] : [])
+    ...(flags.stopOnTitle ? ["--stop-on-title"] : [])
   ], {
     quietWithOutput: !flags.electronLogs,
     timeoutMs: Number(flags.recordTimeout || Math.max(180000, duration * 2000 + 180000)),

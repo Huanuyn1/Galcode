@@ -31,7 +31,7 @@ const REQUIRED_PROJECT_TEXT = [
   [path.join("src", "galcode.js"), "npmInvocation"],
   [path.join("src", "galcode.js"), "resolveProjectRoot"],
   [path.join("src", "gui", "main.cjs"), "resolveRootDir"],
-  [path.join("src", "electron-recorder.cjs"), "startFfmpegEncoder"]
+  [path.join("src", "electron-recorder.cjs"), "capture-page-pipeline-20260620"]
 ];
 const PRESERVED_INSTALL_PATHS = [
   ".galcode",
@@ -125,16 +125,30 @@ function resolveRootDir() {
     }
   }
 
-  const candidates = [
-    exeDir,
-    path.resolve(exeDir, ".."),
-    process.cwd(),
-    path.resolve(__dirname, "..")
-  ];
+  const candidates = rootSearchCandidates(exeDir);
   for (const candidate of candidates) {
     if (isProjectRoot(candidate)) return candidate;
   }
   return exeDir;
+}
+
+function rootSearchCandidates(exeDir) {
+  const bases = unique([
+    exeDir,
+    path.resolve(exeDir, ".."),
+    path.resolve(exeDir, "..", ".."),
+    process.cwd(),
+    path.resolve(process.cwd(), ".."),
+    path.resolve(__dirname, "..")
+  ]);
+  const candidates = [];
+  for (const base of bases) {
+    candidates.push(base);
+    candidates.push(path.join(base, "Galcode"));
+    candidates.push(path.join(base, "galcode"));
+    candidates.push(path.join(base, "app"));
+  }
+  return unique(candidates);
 }
 
 function isProjectRoot(dir) {
