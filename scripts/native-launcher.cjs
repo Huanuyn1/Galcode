@@ -31,7 +31,7 @@ const REQUIRED_PROJECT_TEXT = [
   [path.join("src", "galcode.js"), "npmInvocation"],
   [path.join("src", "galcode.js"), "resolveProjectRoot"],
   [path.join("src", "gui", "main.cjs"), "resolveRootDir"],
-  [path.join("src", "electron-recorder.cjs"), "capture-page-pipeline-20260620"]
+  [path.join("src", "electron-recorder.cjs"), "capture-page-pipeline-gpu-launch-switches-20260621"]
 ];
 const PRESERVED_INSTALL_PATHS = [
   ".galcode",

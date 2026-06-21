@@ -17,7 +17,7 @@ const url = args.url;
 const out = path.resolve(args.out || "final.mp4");
 const ffmpeg = args.ffmpeg || "ffmpeg";
 const startDelay = Number(args.startDelay || 1500);
-const GALCODE_RECORDER_MODE = "capture-page-pipeline-20260620";
+const GALCODE_RECORDER_MODE = "capture-page-pipeline-gpu-launch-switches-20260621";
 const gpuMode = normalizeGpuMode(args.electronGpu || args.gpuMode || args.gpu || process.env.GALCODE_ELECTRON_GPU || "hardware");
 
 if (!url) fail("Missing --url");
@@ -43,6 +43,7 @@ configureGpuMode(gpuMode);
 if (isWindows) {
   app.commandLine.appendSwitch("disable-features", "CalculateNativeWinOcclusion");
 }
+console.error(`Galcode electron boot: mode=${GALCODE_RECORDER_MODE}, gpu=${gpuMode}, platform=${process.platform}, arch=${process.arch}`);
 
 app.whenReady().then(main).catch(fail);
 
@@ -243,10 +244,13 @@ function normalizeGpuMode(value) {
 function configureGpuMode(mode) {
   if (mode === "software") {
     app.disableHardwareAcceleration();
+    app.commandLine.appendSwitch("disable-gpu");
+    app.commandLine.appendSwitch("disable-gpu-sandbox");
     app.commandLine.appendSwitch("disable-gpu-compositing");
     app.commandLine.appendSwitch("disable-gpu-rasterization");
     app.commandLine.appendSwitch("disable-accelerated-2d-canvas");
-    if (isWindows) app.commandLine.appendSwitch("enable-unsafe-swiftshader");
+    app.commandLine.appendSwitch("disable-accelerated-video-decode");
+    if (isWindows) app.commandLine.appendSwitch("no-sandbox");
     return;
   }
 
@@ -255,6 +259,10 @@ function configureGpuMode(mode) {
     app.commandLine.appendSwitch("enable-unsafe-swiftshader");
     app.commandLine.appendSwitch("use-angle", "swiftshader");
     app.commandLine.appendSwitch("use-gl", "swiftshader");
+    if (isWindows) {
+      app.commandLine.appendSwitch("no-sandbox");
+      app.commandLine.appendSwitch("disable-gpu-sandbox");
+    }
     return;
   }
 

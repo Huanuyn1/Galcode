@@ -408,6 +408,7 @@ Recording:
   Add --stop-on-title only if you want recording to end early at the title screen.
   For Windows GPU/driver crashes, try --electron-gpu software. Modes:
   auto, hardware, software, swiftshader. Windows defaults to auto.
+  --electron-gpu software also passes Electron startup GPU/sandbox switches.
   Recommended capture backend is --capture electron: cross-platform background
   Chromium offscreen rendering. --capture avfoundation is macOS-only visible
   screen capture; --capture screenshot is a deterministic fallback.
@@ -2676,9 +2677,10 @@ async function recordProject(projectDir, flags) {
   }
   const size = flags.size || "1280x720";
 
-  const hasFfmpeg = await commandExists("ffmpeg");
+  const ffmpegCommand = flags.ffmpeg || "ffmpeg";
+  const hasFfmpeg = await commandExists(ffmpegCommand);
   if (!hasFfmpeg) {
-    console.warn("ffmpeg was not found. Skipping video recording.");
+    console.warn(`${ffmpegCommand} was not found. Skipping video recording.`);
     console.warn(`Preview URL: ${url}`);
     if (autoServer?.child) autoServer.child.kill("SIGTERM");
     return;
@@ -2802,8 +2804,10 @@ async function recordWithElectronOffscreen(url, { width, height, duration, fps, 
   for (let index = 0; index < gpuAttempts.length; index += 1) {
     const attemptMode = gpuAttempts[index];
     if (index > 0) console.warn(`Retrying Electron recorder with --electron-gpu ${attemptMode} after GPU-mode failure.`);
+    const electronSwitches = electronLaunchSwitchesForGpuMode(attemptMode, flags);
     try {
       await runRecorderProcess(electron, [
+        ...electronSwitches,
         script,
         "--url", url,
         "--out", out,
@@ -2847,6 +2851,32 @@ function resolveElectronGpuMode(flags) {
   if (mode === "swiftshader" || mode === "swift-shader") return "swiftshader";
   if (mode === "hardware" || mode === "gpu" || mode === "on" || mode === "true" || mode === "1") return "hardware";
   throw new Error(`Unknown --electron-gpu mode: ${raw}. Use auto, hardware, software, or swiftshader.`);
+}
+
+function electronLaunchSwitchesForGpuMode(mode, flags) {
+  const switches = [];
+  const wantsNoSandbox = flags.electronNoSandbox || flags.noSandbox || (process.platform === "win32" && (mode === "software" || mode === "swiftshader"));
+  if (wantsNoSandbox) {
+    switches.push("--no-sandbox", "--disable-gpu-sandbox");
+  }
+
+  if (mode === "software") {
+    switches.push(
+      "--disable-gpu",
+      "--disable-gpu-compositing",
+      "--disable-gpu-rasterization",
+      "--disable-accelerated-2d-canvas",
+      "--disable-accelerated-video-decode"
+    );
+  } else if (mode === "swiftshader") {
+    switches.push(
+      "--enable-unsafe-swiftshader",
+      "--use-angle=swiftshader",
+      "--use-gl=swiftshader"
+    );
+  }
+
+  return switches;
 }
 
 function runRecorderProcess(command, args, options = {}) {
