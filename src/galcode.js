@@ -309,7 +309,7 @@ export async function main(argv) {
   if (!command) return agentCommand(flags);
 
   if (command === "agent" || command === "chat" || command === "interactive") return agentCommand(flags);
-  if (command === "gui" || command === "app") return guiCommand(flags, positionals);
+  if (command === "gui" || command === "app" || command === "/gui") return guiCommand(flags, positionals);
   if (command === "init") return initConfig(flags);
   if (command === "configure") return configureCommand(flags);
   if (command === "setup") return setupRepos(flags);
@@ -373,6 +373,7 @@ function printHelp() {
 Usage:
   galcode
   galcode gui
+  galcode /gui
   galcode agent
   galcode init
   galcode configure
@@ -388,7 +389,7 @@ Usage:
   galcode record outputs/story --url http://localhost:3000
 
 Modes:
-  gui       Open the graphical Galcode app.
+  gui,/gui  Open the graphical Galcode app.
   agent     Interactive AI director. Chat, brainstorm, generate, compile, record.
   discuss   Ask you a few creative-direction questions, then AI writes the work.
   yolo      No questions. AI chooses direction and writes the work.
@@ -555,6 +556,7 @@ async function readLocalConfig(configPath) {
 async function agentCommand(flags = {}) {
   flags.assets = flags.assets || DEFAULT_ASSETS_DIR;
   flags.duration = flags.duration || 60;
+  const preferences = createAgentPreferences(flags);
   await loadPrompts(flags);
   const rl = readline.createInterface({ input, output });
   try {
@@ -588,16 +590,31 @@ async function agentCommand(flags = {}) {
         printAgentHelp();
         continue;
       }
+      if (line === "/gui") {
+        console.log("正在启动 Galcode GUI。关闭 GUI 后会回到当前 CLI 会话。");
+        await guiCommand(flags, []);
+        continue;
+      }
       if (line === "/config") {
         rl.close();
         await configureCommand(flags);
         await loadLocalConfig(flags);
         return agentCommand(flags);
       }
+      if (line === "/settings" || line === "/prefs") {
+        printAgentPreferences(preferences);
+        continue;
+      }
+      if (line === "/set" || line.startsWith("/set ") || isAgentPreferenceShortcut(line)) {
+        await updateAgentPreferences(rl, preferences, line);
+        applyAgentPreferencesToBrief(discussionBrief, preferences);
+        continue;
+      }
       if (line === "/yolo") {
         discussionHistory = [];
         discussionBrief = null;
-        await runAgentCreation(rl, flags, yoloBrief(flags), "yolo");
+        const runFlags = flagsWithAgentPreferences(flags, preferences);
+        await runAgentCreation(rl, runFlags, yoloBrief(runFlags), "yolo");
         continue;
       }
       if (line.startsWith("/brainstorm")) {
@@ -608,7 +625,7 @@ async function agentCommand(flags = {}) {
       if (line.startsWith("/make")) {
         const topic = line.replace(/^\/make\s*/i, "").trim() || await rl.question("想写什么主题？ ");
         discussionHistory = [];
-        discussionBrief = await briefFromTopic(rl, flags, topic);
+        discussionBrief = await briefFromTopic(rl, flagsWithAgentPreferences(flags, preferences), topic);
         if (flags.offline) {
           console.log("离线模式下无法进行 AI 讨论。使用 /yolo 生成离线 demo。");
           continue;
@@ -636,13 +653,7 @@ async function agentCommand(flags = {}) {
 
       if (!discussionHistory.length) {
         // 首条消息：以此为主题初始化讨论
-        discussionBrief = {
-          theme: line,
-          characters: "让 AI 从素材库中选择 2 到 4 位角色",
-          tone: "贴近 MyGO/Ave Mujica 的纠结、克制、和解感",
-          durationSec: Number(flags.duration || 180),
-          constraints: "非商业同人，不成人，不血腥，不批量投稿"
-        };
+        discussionBrief = briefFromDirectIdea(line, preferences);
         discussionManifest = discussionManifest || await loadManifestForRun(flags, "work/asset-manifest.json");
         await startDiscussion(rl, flags, discussionBrief, discussionManifest, discussionHistory);
       } else {
@@ -659,10 +670,14 @@ function printAgentHelp() {
   console.log([
     "命令：",
     "  直接输入想法        与 AI 导演多轮讨论，打磨你的二创故事",
+    "  /gui                启动图形界面，关闭后回到 CLI",
     "  /brainstorm 主题    先让 AI 给 3 个二创方向",
     "  /make 主题          设定主题、角色、时长后开始讨论",
     "  /generate           根据讨论内容生成 WebGAL 工程 + 录制视频",
     "  /yolo               跳过讨论，直接生成（AI 自由发挥）",
+    "  /settings           查看直接输入想法时使用的角色、口味、时长等参数",
+    "  /set duration 90    设置直接输入想法的目标时长；也支持 /set tone、/set characters、/set constraints",
+    "  /时长 90            /口味 更甜一点但最后留刺；/角色 灯和爱音",
     "  /config             重新配置 API key / 模型 / Base URL",
     "  /quit               退出",
     "",
@@ -670,6 +685,136 @@ function printAgentHelp() {
     "讨论过程中 AI 导演不会直接输出脚本，而是陪你反复推敲剧情。",
     "当你觉得方向清晰了，输入 /generate 即可调用管线生成成片。"
   ].join("\n"));
+}
+
+function createAgentPreferences(flags) {
+  return {
+    durationSec: positiveNumber(flags.durationSec || flags.duration, 60),
+    characters: String(flags.characters || "让 AI 从素材库中选择 2 到 4 位角色"),
+    tone: String(flags.tone || "贴近 MyGO/Ave Mujica 的纠结、克制、和解感，不崩坏人设"),
+    constraints: String(flags.constraints || "非商业同人，不成人，不血腥，不使用歌词，不批量投稿")
+  };
+}
+
+function flagsWithAgentPreferences(flags, preferences) {
+  return {
+    ...flags,
+    duration: preferences.durationSec,
+    durationSec: preferences.durationSec,
+    characters: preferences.characters,
+    tone: preferences.tone,
+    constraints: preferences.constraints
+  };
+}
+
+function briefFromDirectIdea(theme, preferences) {
+  return {
+    theme,
+    characters: preferences.characters,
+    tone: preferences.tone,
+    durationSec: preferences.durationSec,
+    constraints: preferences.constraints
+  };
+}
+
+function printAgentPreferences(preferences) {
+  console.log([
+    "当前直接输入想法时使用的参数：",
+    `  时长：${preferences.durationSec}s`,
+    `  角色：${preferences.characters}`,
+    `  口味：${preferences.tone}`,
+    `  雷点：${preferences.constraints}`,
+    "",
+    "可用设置：/set duration 90、/set tone 更甜一点、/set characters 灯和爱音、/set constraints 不要刀"
+  ].join("\n"));
+}
+
+function isAgentPreferenceShortcut(line) {
+  return /^\/(duration|dur|time|tone|taste|characters|chars|constraints|时长|口味|情绪|角色|雷点|禁止)(\s|$)/i.test(line);
+}
+
+async function updateAgentPreferences(rl, preferences, line) {
+  const parsed = parseAgentPreferenceCommand(line);
+  if (!parsed.key) {
+    await promptAgentPreferences(rl, preferences);
+    printAgentPreferences(preferences);
+    return;
+  }
+
+  const key = normalizeAgentPreferenceKey(parsed.key);
+  if (!key) {
+    console.log("不知道要设置哪一项。可用：duration/tone/characters/constraints。");
+    return;
+  }
+
+  let value = parsed.value;
+  if (!value) {
+    const label = key === "duration" ? "时长秒数" : key === "tone" ? "口味/情绪" : key === "characters" ? "角色" : "雷点/禁止事项";
+    value = (await rl.question(`${label}： `)).trim();
+  }
+  if (!value) return;
+
+  if (key === "duration") {
+    const duration = Number(value);
+    if (!Number.isFinite(duration) || duration <= 0) {
+      console.log("时长需要是大于 0 的数字，比如 /set duration 90。");
+      return;
+    }
+    preferences.durationSec = Math.round(duration);
+  } else if (key === "tone") {
+    preferences.tone = value;
+  } else if (key === "characters") {
+    preferences.characters = value;
+  } else if (key === "constraints") {
+    preferences.constraints = value;
+  }
+  printAgentPreferences(preferences);
+}
+
+async function promptAgentPreferences(rl, preferences) {
+  const duration = await rl.question(`目标时长秒数？当前 ${preferences.durationSec}： `);
+  const characters = await rl.question(`登场角色？当前 ${preferences.characters}： `);
+  const tone = await rl.question(`口味/情绪？当前 ${preferences.tone}： `);
+  const constraints = await rl.question(`雷点/禁止事项？当前 ${preferences.constraints}： `);
+
+  if (duration.trim()) {
+    const next = Number(duration.trim());
+    if (Number.isFinite(next) && next > 0) preferences.durationSec = Math.round(next);
+    else console.log("时长不是有效数字，已保留原值。");
+  }
+  if (characters.trim()) preferences.characters = characters.trim();
+  if (tone.trim()) preferences.tone = tone.trim();
+  if (constraints.trim()) preferences.constraints = constraints.trim();
+}
+
+function parseAgentPreferenceCommand(line) {
+  const trimmed = line.trim();
+  const setMatch = trimmed.match(/^\/set(?:\s+(\S+))?(?:\s+([\s\S]+))?$/i);
+  if (setMatch) return { key: setMatch[1] || "", value: (setMatch[2] || "").trim() };
+  const shortcutMatch = trimmed.match(/^\/(\S+)(?:\s+([\s\S]+))?$/);
+  return { key: shortcutMatch?.[1] || "", value: (shortcutMatch?.[2] || "").trim() };
+}
+
+function normalizeAgentPreferenceKey(key) {
+  const normalized = String(key || "").toLowerCase();
+  if (["duration", "dur", "time", "时长"].includes(normalized)) return "duration";
+  if (["tone", "taste", "flavor", "口味", "情绪"].includes(normalized)) return "tone";
+  if (["characters", "character", "chars", "角色"].includes(normalized)) return "characters";
+  if (["constraints", "constraint", "limits", "ban", "雷点", "禁止"].includes(normalized)) return "constraints";
+  return "";
+}
+
+function applyAgentPreferencesToBrief(brief, preferences) {
+  if (!brief) return;
+  brief.durationSec = preferences.durationSec;
+  brief.characters = preferences.characters;
+  brief.tone = preferences.tone;
+  brief.constraints = preferences.constraints;
+}
+
+function positiveNumber(value, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : fallback;
 }
 
 async function briefFromTopic(rl, flags, topic) {
