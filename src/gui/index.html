@@ -4,20 +4,35 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Galcode</title>
+    <link rel="icon" href="./assets/galcode-icon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="./styles.css">
   </head>
   <body>
     <main class="app-shell">
       <aside class="sidebar">
-        <div>
-          <h1>Galcode</h1>
-          <p id="rootPath" class="muted"></p>
+        <div class="brand">
+          <img class="brand-mark" src="./assets/galcode-icon.svg" alt="" aria-hidden="true">
+          <div class="brand-copy">
+            <h1>Galcode</h1>
+            <p>TwigooStudio</p>
+          </div>
         </div>
+        <p id="rootPath" class="root-path"></p>
         <nav>
-          <button class="nav-button active" data-view="create">创作</button>
-          <button class="nav-button" data-view="setup">配置</button>
-          <button class="nav-button" data-view="logs">日志</button>
+          <button class="nav-button active" data-view="create"><span class="nav-mark"></span>创作</button>
+          <button class="nav-button" data-view="setup"><span class="nav-mark"></span>配置</button>
+          <button class="nav-button" data-view="logs"><span class="nav-mark"></span>日志</button>
         </nav>
+        <label class="theme-switch" for="visualThemeInput">
+          <span class="theme-switch-copy">
+            <span class="theme-title">背景色调</span>
+            <span id="visualThemeState" class="theme-state">雨夜浮游</span>
+          </span>
+          <span class="toggle-wrap compact">
+            <input id="visualThemeInput" class="toggle-input" type="checkbox">
+            <span class="toggle-track" aria-hidden="true"><span class="toggle-thumb"></span></span>
+          </span>
+        </label>
         <div class="sidebar-actions">
           <button id="doctorBtn" class="secondary">自检</button>
           <button id="installBtn" class="secondary">修复依赖</button>
@@ -27,7 +42,7 @@
 
       <section class="workspace">
         <section id="create" class="view active">
-          <div class="toolbar">
+          <div class="toolbar page-toolbar">
             <div>
               <h2>生成 WebGAL 视频</h2>
             </div>
@@ -51,7 +66,7 @@
           </div>
 
           <div class="switch-row">
-            <label><input id="recordInput" type="checkbox" checked> 录制 final.mp4</label>
+            <label class="plain-check"><input id="recordInput" type="checkbox" checked> 录制 final.mp4</label>
           </div>
 
           <div class="action-row">
@@ -62,33 +77,48 @@
         </section>
 
         <section id="setup" class="view">
-          <div class="toolbar">
+          <div class="toolbar page-toolbar">
             <div>
               <h2>AI 配置</h2>
             </div>
           </div>
 
-          <div class="grid">
-            <label class="field">
-              <span>Base URL</span>
-              <input id="baseUrlInput" type="text">
+          <div class="settings-stack">
+            <label class="compat-card" for="gpuCompatInput">
+              <span class="compat-icon" aria-hidden="true"></span>
+              <span class="compat-copy">
+                <span class="compat-title">Win 用户兼容方案</span>
+                <span class="compat-text">禁用 GPU 硬件加速，遇到 Electron 闪退、黑屏或退出码 -1 时开启。</span>
+              </span>
+              <span class="toggle-wrap">
+                <input id="gpuCompatInput" class="toggle-input" type="checkbox">
+                <span class="toggle-track" aria-hidden="true"><span class="toggle-thumb"></span></span>
+                <span id="gpuCompatState" class="toggle-label">GPU 硬件加速开启</span>
+              </span>
             </label>
+
+            <div class="grid">
+              <label class="field">
+                <span>Base URL</span>
+                <input id="baseUrlInput" type="text">
+              </label>
+              <label class="field">
+                <span>模型</span>
+                <input id="modelInput" type="text">
+              </label>
+            </div>
+
             <label class="field">
-              <span>模型</span>
-              <input id="modelInput" type="text">
+              <span>API key</span>
+              <input id="apiKeyInput" type="password" placeholder="已有 key 时可留空">
             </label>
+
+            <button id="saveConfigBtn" class="primary">保存配置</button>
           </div>
-
-          <label class="field">
-            <span>API key</span>
-            <input id="apiKeyInput" type="password" placeholder="已有 key 时可留空">
-          </label>
-
-          <button id="saveConfigBtn" class="primary">保存配置</button>
         </section>
 
         <section id="logs" class="view">
-          <div class="toolbar">
+          <div class="toolbar page-toolbar">
             <div>
               <h2>运行日志</h2>
             </div>

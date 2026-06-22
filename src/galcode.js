@@ -516,6 +516,13 @@ async function loadLocalConfig(flags) {
   if (!process.env.OPENAI_API_KEY && config.openaiApiKey) process.env.OPENAI_API_KEY = config.openaiApiKey;
   if (!process.env.OPENAI_MODEL && config.openaiModel) process.env.OPENAI_MODEL = config.openaiModel;
   if (!process.env.OPENAI_BASE_URL && config.openaiBaseUrl) process.env.OPENAI_BASE_URL = config.openaiBaseUrl;
+  if (config.electronGpu && !hasAnyFlag(flags, ["electronGpu", "electronGpuMode", "gpuMode", "gpu", "disableGpu", "softwareRendering", "cpuRendering"])) {
+    flags.electronGpu = config.electronGpu;
+  }
+}
+
+function hasAnyFlag(flags, keys) {
+  return keys.some((key) => flags[key] !== undefined);
 }
 
 async function loadDotEnv(file) {

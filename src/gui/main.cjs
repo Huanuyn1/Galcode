@@ -27,9 +27,9 @@ app.on("window-all-closed", () => {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1120,
-    height: 760,
-    minWidth: 920,
+    width: 1360,
+    height: 820,
+    minWidth: 1040,
     minHeight: 620,
     title: "Galcode",
     backgroundColor: "#101419",
@@ -49,7 +49,9 @@ ipcMain.handle("galcode:get-state", async () => {
     node: NODE,
     hasApiKey: Boolean(config.openaiApiKey || process.env.OPENAI_API_KEY),
     openaiBaseUrl: config.openaiBaseUrl || process.env.OPENAI_BASE_URL || "https://api.openai.com/v1",
-    openaiModel: config.openaiModel || process.env.OPENAI_MODEL || "gpt-4.1-mini"
+    openaiModel: config.openaiModel || process.env.OPENAI_MODEL || "gpt-4.1-mini",
+    electronGpu: normalizeElectronGpuMode(config.electronGpu || process.env.GALCODE_ELECTRON_GPU || defaultElectronGpuMode()),
+    visualTheme: normalizeVisualTheme(config.visualTheme || process.env.GALCODE_VISUAL_THEME || "dark")
   };
 });
 
@@ -57,25 +59,29 @@ ipcMain.handle("galcode:save-config", async (_event, config) => {
   const target = path.join(ROOT_DIR, ".galcode", "config.json");
   await fsp.mkdir(path.dirname(target), { recursive: true });
   const existing = await readConfig();
+  const has = (key) => Object.prototype.hasOwnProperty.call(config || {}, key);
   const next = {
     ...existing,
-    openaiBaseUrl: String(config.openaiBaseUrl || "").trim() || "https://api.openai.com/v1",
-    openaiModel: String(config.openaiModel || "").trim() || "gpt-4.1-mini",
-    openaiApiKey: String(config.openaiApiKey || "").trim() || existing.openaiApiKey || ""
+    openaiBaseUrl: has("openaiBaseUrl") ? String(config.openaiBaseUrl || "").trim() || "https://api.openai.com/v1" : existing.openaiBaseUrl || "https://api.openai.com/v1",
+    openaiModel: has("openaiModel") ? String(config.openaiModel || "").trim() || "gpt-4.1-mini" : existing.openaiModel || "gpt-4.1-mini",
+    openaiApiKey: has("openaiApiKey") ? String(config.openaiApiKey || "").trim() || existing.openaiApiKey || "" : existing.openaiApiKey || "",
+    electronGpu: has("electronGpu") ? normalizeElectronGpuMode(config.electronGpu || defaultElectronGpuMode()) : normalizeElectronGpuMode(existing.electronGpu || defaultElectronGpuMode()),
+    visualTheme: has("visualTheme") ? normalizeVisualTheme(config.visualTheme) : normalizeVisualTheme(existing.visualTheme || "dark")
   };
   await fsp.writeFile(target, `${JSON.stringify(next, null, 2)}\n`, "utf8");
   await fsp.chmod(target, 0o600).catch(() => {});
-  return { ok: true, hasApiKey: Boolean(next.openaiApiKey) };
+  return { ok: true, hasApiKey: Boolean(next.openaiApiKey), electronGpu: next.electronGpu, visualTheme: next.visualTheme };
 });
 
 ipcMain.handle("galcode:run", async (event, task) => {
   if (activeChild) throw new Error("已有任务正在运行，请先停止或等待完成。");
   const id = task.id || `task-${Date.now()}`;
-  const command = buildTaskCommand(task);
+  const command = await buildTaskCommand(task);
   sendLog(id, [
     `Root: ${ROOT_DIR}`,
     `Node: ${NODE}`,
     `Electron: ${process.execPath}`,
+    `Electron GPU: ${command.electronGpu}`,
     `CWD: ${process.cwd()}`,
     `$ ${command.label}`,
     ""
@@ -87,6 +93,7 @@ ipcMain.handle("galcode:run", async (event, task) => {
       ...process.env,
       GALCODE_ROOT: ROOT_DIR,
       GALCODE_NODE: NODE,
+      GALCODE_ELECTRON_GPU: command.electronGpu,
       ELECTRON: process.execPath,
       PATH: buildPath()
     }
@@ -121,22 +128,26 @@ ipcMain.handle("galcode:open-path", async (_event, targetPath) => {
   return { ok: true };
 });
 
-function buildTaskCommand(task) {
+async function buildTaskCommand(task) {
   if (task.kind === "doctor") {
     return {
       command: NODE,
       args: [path.join(ROOT_DIR, "scripts", "galcode-bootstrap.mjs"), "doctor"],
-      label: "galcode doctor"
+      label: "galcode doctor",
+      electronGpu: normalizeElectronGpuMode(process.env.GALCODE_ELECTRON_GPU || defaultElectronGpuMode())
     };
   }
   if (task.kind === "install") {
     return {
       command: NODE,
       args: [path.join(ROOT_DIR, "scripts", "galcode-bootstrap.mjs"), "install", "--force"],
-      label: "galcode install --force"
+      label: "galcode install --force",
+      electronGpu: normalizeElectronGpuMode(process.env.GALCODE_ELECTRON_GPU || defaultElectronGpuMode())
     };
   }
 
+  const config = await readConfig();
+  const electronGpu = normalizeElectronGpuMode(task.electronGpu || config.electronGpu || process.env.GALCODE_ELECTRON_GPU || defaultElectronGpuMode());
   const cliArgs = [];
   const out = String(task.out || "").trim() || path.join("outputs", timestampSlug("gui"));
   if (task.kind === "offline") {
@@ -146,11 +157,12 @@ function buildTaskCommand(task) {
     if (!theme) throw new Error("请先输入主题。");
     cliArgs.push("make", "--theme", theme, "--duration", String(task.duration || 60), "--out", out);
   }
-  if (task.record) cliArgs.push("--record");
+  if (task.record) cliArgs.push("--record", "--electron-gpu", electronGpu);
   return {
     command: NODE,
     args: [path.join(ROOT_DIR, "bin", "galcode.js"), ...cliArgs],
-    label: `galcode ${cliArgs.join(" ")}`
+    label: `galcode ${cliArgs.join(" ")}`,
+    electronGpu
   };
 }
 
@@ -205,6 +217,24 @@ function buildPath() {
     "/usr/local/bin",
     process.env.PATH || ""
   ].filter(Boolean).join(path.delimiter);
+}
+
+function defaultElectronGpuMode() {
+  return process.platform === "win32" ? "auto" : "hardware";
+}
+
+function normalizeElectronGpuMode(value) {
+  const mode = String(value || defaultElectronGpuMode()).trim().toLowerCase();
+  if (mode === "auto") return "auto";
+  if (["software", "cpu", "off", "disabled", "false", "0"].includes(mode)) return "software";
+  if (["hardware", "gpu", "on", "enabled", "true", "1"].includes(mode)) return "hardware";
+  if (mode === "swiftshader" || mode === "swift-shader") return "swiftshader";
+  return defaultElectronGpuMode();
+}
+
+function normalizeVisualTheme(value) {
+  const theme = String(value || "dark").trim().toLowerCase();
+  return ["light", "day", "bright", "晴", "晴天", "浅色"].includes(theme) ? "light" : "dark";
 }
 
 function resolveRootDir() {

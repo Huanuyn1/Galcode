@@ -20,6 +20,11 @@ const REQUIRED_PROJECT_FILES = [
   path.join("src", "gui", "main.cjs"),
   path.join("src", "gui", "preload.cjs"),
   path.join("src", "gui", "index.html"),
+  path.join("src", "gui", "renderer.js"),
+  path.join("src", "gui", "styles.css"),
+  path.join("src", "gui", "assets", "galcode-icon.svg"),
+  path.join("src", "gui", "assets", "mygo-umbrella-dark.png"),
+  path.join("src", "gui", "assets", "mygo-umbrella-light.png"),
   path.join("vendor", "webgal-mygo", "packages", "webgal", "public", "lib", "live2d.min.js"),
   path.join("vendor", "webgal-mygo", "packages", "webgal", "public", "lib", "live2dcubismcore.min.js")
 ];
