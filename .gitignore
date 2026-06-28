@@ -13,3 +13,11 @@ vendor/webgal-mygo/node_modules/
 vendor/webgal-mygo/packages/webgal/node_modules/
 vendor/webgal-mygo/packages/parser/node_modules/
 vendor/.DS_Store
+
+# Do not redistribute copyrighted Live2D runtime/model assets in the public repo.
+figure/mygo/
+figure/_mtn_exp/
+vendor/webgal-mygo/packages/webgal/public/game/figure/live2d/
+vendor/webgal-mygo/packages/webgal/public/lib/live2d.min.js
+vendor/webgal-mygo/packages/webgal/public/lib/live2dcubismcore.min.js
+vendor/webgal-mygo/packages/webgal/public/lib/LIVE2D_RUNTIME_SOURCES.md

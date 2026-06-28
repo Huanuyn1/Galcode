@@ -4,6 +4,8 @@
 
 第一次运行需要联网。它会自动下载 Galcode 项目文件、准备便携 Node.js、安装 npm/WebGAL 依赖，然后启动 Galcode GUI。录制视频仍然需要 FFmpeg。
 
+公开仓库和这个 launcher 不内置 Live2D SDK runtime，也不内置官方 Live2D 模型、动作、贴图等版权资源。需要完整演示文件时，请移步作者 B 站账号观看本项目介绍视频，并按视频里的进群方式获取完整文件。
+
 如果网络访问 GitHub 不稳定，请使用完整项目包，或把 `Galcode-windows.exe` 放在 Galcode 项目根目录/项目根目录下的 `release` 文件夹里再双击；新版启动器会优先寻找本地项目，找不到时才在线下载。
 
 如果 Windows 提示“未知发布者”，请选择“更多信息”再继续运行。

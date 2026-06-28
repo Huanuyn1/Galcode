@@ -430,6 +430,7 @@ Live2D:
   WebGAL also needs Live2D runtime files in public/lib:
   live2d.min.js and live2dcubismcore.min.js. Use install-live2d-runtime --from <dir>,
   or pass --live2d-runtime-dir <dir> while recording.
+  Public release packages do not bundle Live2D SDK/runtime or official model assets.
 
 Unstable network:
   Use download-assets instead of git clone. It downloads GitHub zip files with
@@ -3256,6 +3257,7 @@ async function ensureLive2DRuntime(webgalDir, gameDir, flags = {}) {
   const libDir = path.join(webgalDir, "public", "lib");
   const message = [
     `Live2D runtime is missing: ${missing.join(", ")}`,
+    "These files are not bundled because the Live2D SDK/runtime is copyrighted.",
     `Put ${LIVE2D_RUNTIME_FILES.join(" and ")} into ${libDir},`,
     "or run `galcode install-live2d-runtime --from <dir>` after obtaining the Live2D runtime files.",
     "Without these files WebGAL disables Live2D and the recorded video will not show models."

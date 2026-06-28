@@ -1,6 +1,6 @@
 # Galcode
 
-AI 驱动的 WebGAL 二创 CLI。输入一句脑洞，Galcode 会根据本地 MyGO / Ave Mujica 素材生成剧情结构、编译 WebGAL 脚本、套用 Bang Dream 手游风格主题，并把 WebGAL 画面录制成视频。
+AI 驱动的 WebGAL 二创 CLI。输入一句脑洞，Galcode 会根据你本地准备好的素材生成剧情结构、编译 WebGAL 脚本、套用 Bang Dream 手游风格主题，并把 WebGAL 画面录制成视频。
 
 `main` 分支现在是 Windows / macOS / Linux 通用版。第一次使用建议先看 Windows 新手手册：[小白看这里](docs/小白看这里.md)。
 
@@ -9,6 +9,8 @@ AI 驱动的 WebGAL 二创 CLI。输入一句脑洞，Galcode 会根据本地 My
 Windows 新手优先使用仓库里的 `release/Galcode-windows.exe`，或者从发布包里下载同名文件，然后直接双击。
 
 这个 exe 会自动下载/校验 Galcode 项目文件，准备便携 Node.js，安装 npm / Electron / WebGAL 依赖，并打开图形界面。第一次运行需要联网；录制 `final.mp4` 仍然需要电脑里能找到 FFmpeg。
+
+注意：公开仓库和单文件 launcher 不会内置 Live2D SDK runtime，也不会内置官方 Live2D 模型、动作、贴图等版权资源。需要完整演示素材的用户，请移步作者 B 站账号观看本项目介绍视频，并按视频里的进群方式获取完整文件。
 
 如果双击失败，优先看 exe 旁边的 `Galcode-launcher.log`；没有的话再看 `%LOCALAPPDATA%\Galcode\logs\Galcode-launcher.log`。
 
@@ -213,7 +215,7 @@ npm run package:current
 npm run package:release
 ```
 
-产物会放在 `dist/`。发行包里包含 `start.bat`、`start.sh`、`install.bat`、`install.sh` 和项目素材；如果先运行过 `npm run build:launcher:all`，还会包含 `Galcode-windows.exe`、`Galcode-macos-*` 和 `Galcode-linux-x64`。用户解压后双击对应平台的 Galcode launcher 即可启动。仓库的 `release/Galcode-windows.exe` 可以单文件分发，双击后会在线自举项目文件。首次运行需要联网，以便下载项目文件、便携 Node、npm 依赖和补齐 WebGAL engine。
+产物会放在 `dist/`。发行包里包含 `start.bat`、`start.sh`、`install.bat`、`install.sh`、项目代码、模板和可公开分发资源；不会包含 Live2D SDK runtime 或官方 Live2D 模型资源。如果先运行过 `npm run build:launcher:all`，还会包含 `Galcode-windows.exe`、`Galcode-macos-*` 和 `Galcode-linux-x64`。用户解压后双击对应平台的 Galcode launcher 即可启动。仓库的 `release/Galcode-windows.exe` 可以单文件分发，双击后会在线自举项目文件。首次运行需要联网，以便下载项目文件、便携 Node、npm 依赖和补齐 WebGAL engine。
 
 ## 项目结构
 
@@ -226,10 +228,19 @@ scripts/native-launcher.cjs 原生双击 launcher 源码
 bin/galcode.js             CLI 入口
 src/galcode.js             CLI 主逻辑
 src/electron-recorder.cjs  Electron 录制器
-figure/                    Live2D 模型 + 背景 + BGM
-vendor/                    WebGAL MyGO 引擎
+figure/                    素材目录；官方 Live2D 模型需用户自行补齐
+vendor/                    WebGAL / webgal-mygo 引擎目录
 ```
 
-## 许可证
+## 上游与许可证
 
-Galcode — MIT。素材仅供个人学习交流，商业使用需自行确认授权。
+Galcode 自身代码遵循 MIT 许可证。
+
+本项目使用 WebGAL 作为视觉小说运行与预览引擎，并会在安装/启动流程中自动准备 WebGAL / webgal-mygo 相关文件与依赖：
+
+- WebGAL: https://github.com/OpenWebGAL/WebGAL
+- webgal-mygo: https://github.com/boomwwww/webgal-mygo
+
+WebGAL / webgal-mygo 遵循其上游许可证。Galcode 不是 WebGAL 引擎本体，也不是 Live2D SDK 或官方角色素材的再发行项目。
+
+Live2D SDK runtime 文件（例如 `live2d.min.js`、`live2dcubismcore.min.js`）以及官方 Live2D 模型、动作、贴图等文件（例如 `.moc`、`.mtn`、`model.json`、`texture_*.png`）由对应权利方版权所有，不能直接内置在公开仓库或公开发行包里。需要完整文件的用户，请移步作者 B 站账号观看本项目介绍视频，并按视频里的进群方式获取；获取后也请仅在授权范围、个人学习交流或非商业同人实验中使用。

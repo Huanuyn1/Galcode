@@ -24,9 +24,7 @@ const REQUIRED_PROJECT_FILES = [
   path.join("src", "gui", "styles.css"),
   path.join("src", "gui", "assets", "galcode-icon.svg"),
   path.join("src", "gui", "assets", "mygo-umbrella-dark.png"),
-  path.join("src", "gui", "assets", "mygo-umbrella-light.png"),
-  path.join("vendor", "webgal-mygo", "packages", "webgal", "public", "lib", "live2d.min.js"),
-  path.join("vendor", "webgal-mygo", "packages", "webgal", "public", "lib", "live2dcubismcore.min.js")
+  path.join("src", "gui", "assets", "mygo-umbrella-light.png")
 ];
 const REQUIRED_PROJECT_TEXT = [
   [path.join("scripts", "galcode-bootstrap.mjs"), "getNpmInvocation"],
