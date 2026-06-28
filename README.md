@@ -164,6 +164,46 @@ Windows PowerShell 把 `./galcode` 换成：
 .\galcode.bat gui
 ```
 
+## MCP 服务器
+
+Galcode 可以作为本地 MCP 服务器接入 Claude Desktop、Codex、Cursor 等支持 MCP 的 AI 工具。MCP 版不启动 GUI，也不内置新的 Agent；它负责把 Galcode 的角色/素材/故事格式/规则暴露给宿主模型，并提供校验、编译和录制工具。
+
+启动命令：
+
+```bash
+npm run mcp
+```
+
+或：
+
+```bash
+node ./bin/galcode-mcp.js
+```
+
+MCP 暴露的主要资源：
+
+| 资源 | 用途 |
+| --- | --- |
+| `galcode://characters` | 角色 key、别名和轻量写作提示 |
+| `galcode://assets` | 可用素材 ID、背景、BGM、Live2D 元数据摘要 |
+| `galcode://story-schema` | 可渲染 story JSON 结构 |
+| `galcode://webgal-rules` | 站位、动作、表情和 WebGAL 编译规则 |
+| `galcode://runtime-status` | 本地依赖、WebGAL、FFmpeg、Live2D runtime 状态 |
+
+MCP 暴露的主要工具：
+
+| 工具 | 用途 |
+| --- | --- |
+| `galcode_validate_story` | 检查 story JSON 的结构、素材 ID、动作/表情 |
+| `galcode_compile_story` | 把 story JSON 编译成 WebGAL 工程 |
+| `galcode_render_video` | 后台录制工程并输出 `final.mp4` |
+| `galcode_job_status` | 查看录制任务进度和日志 |
+| `galcode_list_outputs` | 列出已生成作品 |
+| `galcode_read_output` | 读取作品的 `story.json`、`start.txt` 或 README |
+| `galcode_read_log` | 读取录制任务或本地日志 |
+
+版权边界：MCP 只暴露素材元数据和状态，不把 Live2D SDK/runtime、官方模型、贴图等文件内容作为 resource 输出。
+
 ## 录制
 
 | 参数 | 说明 |

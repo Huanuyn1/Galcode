@@ -4,10 +4,12 @@
   "description": "AI-assisted CLI pipeline for generating MyGO/Ave Mujica WebGAL fan works and recording them as videos.",
   "type": "module",
   "bin": {
-    "galcode": "./bin/galcode.js"
+    "galcode": "./bin/galcode.js",
+    "galcode-mcp": "./bin/galcode-mcp.js"
   },
   "scripts": {
     "galcode": "node ./bin/galcode.js",
+    "mcp": "node ./bin/galcode-mcp.js",
     "check": "node ./bin/galcode.js --help",
     "demo": "node ./bin/galcode.js yolo --offline --out outputs/demo",
     "install:all": "node ./scripts/galcode-bootstrap.mjs install",
