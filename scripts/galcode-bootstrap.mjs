@@ -28,10 +28,12 @@ try {
     await install(parseFlags(argv));
   } else if (command === "start") {
     if (argv[0] === "--") argv.shift();
+    await runPendingRepair();
     await ensureLaunchDependencies({ quick: true, skipCommandInstall: true });
     await run(process.execPath, [path.join(ROOT_DIR, "bin", "galcode.js"), ...argv], { cwd: ROOT_DIR });
   } else if (command === "gui") {
     if (argv[0] === "--") argv.shift();
+    await runPendingRepair();
     await ensureLaunchDependencies({ quick: true, skipCommandInstall: true });
     await launchGui(argv);
   } else if (command === "doctor") {
@@ -94,6 +96,18 @@ async function ensureLaunchDependencies(flags) {
   await install(flags);
 }
 
+// The GUI defers "修复依赖" to the next launch by writing this marker,
+// because reinstalling Electron while the GUI itself runs on that Electron
+// dist bricks the runtime on Windows. Consume the marker here — before any
+// Electron process is started, so no dist files are locked.
+async function runPendingRepair() {
+  const marker = path.join(ROOT_DIR, ".galcode", "pending-repair");
+  if (!fssync.existsSync(marker)) return;
+  console.log("Pending dependency repair requested from the GUI; running a full install before Electron starts...");
+  await install({ force: true, skipCommandInstall: true });
+  await fs.rm(marker, { force: true });
+}
+
 function printHeader(title) {
   console.log("========================================");
   console.log(` ${title}`);
@@ -136,8 +150,19 @@ async function repairElectron(flags) {
   if (runtimeStatus.missing.length > 0) {
     console.log(`Electron runtime missing: ${runtimeStatus.missing.join(", ")}`);
   }
-  await fs.rm(path.join(ROOT_DIR, "node_modules", "electron", "dist"), { recursive: true, force: true });
-  await fs.rm(path.join(ROOT_DIR, "node_modules", "electron", "path.txt"), { force: true });
+  try {
+    await fs.rm(path.join(ROOT_DIR, "node_modules", "electron", "dist"), { recursive: true, force: true });
+    await fs.rm(path.join(ROOT_DIR, "node_modules", "electron", "path.txt"), { force: true });
+  } catch (error) {
+    // On Windows a running Galcode GUI or an orphaned recorder keeps
+    // electron.exe / DLLs locked, so the wipe fails halfway and leaves a
+    // bricked dist behind. Fail loudly with an actionable message instead.
+    throw new Error([
+      `Could not remove the old Electron runtime: ${error.message}.`,
+      "Some files are still in use. Close the Galcode window, end any running",
+      "electron.exe / node.exe processes in Task Manager, then retry."
+    ].join(" "));
+  }
   await run(process.execPath, ["install.js"], {
     cwd: path.join(ROOT_DIR, "node_modules", "electron"),
     env: {
@@ -168,21 +193,44 @@ function getExpectedElectronPath() {
 
 function getElectronRuntimeStatus() {
   const missing = [];
-  const runtimePath = getExpectedElectronPath();
-  if (!fssync.existsSync(runtimePath)) missing.push(path.relative(ROOT_DIR, runtimePath));
+  const distDir = path.join(ROOT_DIR, "node_modules", "electron", "dist");
+  const required = [getExpectedElectronPath()];
   if (isMac) {
-    const frameworkPath = path.join(
-      ROOT_DIR,
-      "node_modules",
-      "electron",
-      "dist",
+    required.push(path.join(
+      distDir,
       "Electron.app",
       "Contents",
       "Frameworks",
       "Electron Framework.framework",
       "Electron Framework"
+    ));
+  } else {
+    // Chromium data files shipped in every Electron dist. A dist reduced to
+    // just the launcher binary still "runs" but dies instantly (Windows:
+    // exit code -1 with no output) or opens blank windows with
+    // "Failed to load *.pak" errors, so existence of the binary alone is
+    // not proof of a healthy runtime.
+    required.push(
+      path.join(distDir, "resources.pak"),
+      path.join(distDir, "chrome_100_percent.pak"),
+      path.join(distDir, "chrome_200_percent.pak"),
+      path.join(distDir, "icudtl.dat"),
+      path.join(distDir, "snapshot_blob.bin"),
+      path.join(distDir, "v8_context_snapshot.bin"),
+      path.join(distDir, "locales", "en-US.pak"),
+      path.join(distDir, "resources", "default_app.asar")
     );
-    if (!fssync.existsSync(frameworkPath)) missing.push(path.relative(ROOT_DIR, frameworkPath));
+    if (isWindows) {
+      required.push(
+        path.join(distDir, "ffmpeg.dll"),
+        path.join(distDir, "libEGL.dll"),
+        path.join(distDir, "libGLESv2.dll")
+      );
+    }
+  }
+  for (const file of required) {
+    const stat = fssync.statSync(file, { throwIfNoEntry: false });
+    if (!stat || stat.size === 0) missing.push(path.relative(ROOT_DIR, file));
   }
   return { ok: missing.length === 0, missing };
 }
@@ -432,13 +480,14 @@ async function doctor() {
   assertNodeVersion();
   printHeader("Galcode Doctor");
   const npm = getNpmInvocation();
+  const electronStatus = getElectronRuntimeStatus();
   const checks = [
     ["Root", ROOT_DIR, true],
     ["Node.js >=20", process.version, true],
     ["npm", npm.label, await npmAvailable(npm)],
     ["ffmpeg", "ffmpeg", await commandExists("ffmpeg")],
     ["Galcode node_modules", "node_modules", fssync.existsSync(path.join(ROOT_DIR, "node_modules"))],
-    ["Electron runtime", getExpectedElectronPath(), getElectronRuntimeStatus().ok],
+    ["Electron runtime", electronStatus.ok ? getExpectedElectronPath() : `incomplete, missing: ${electronStatus.missing.join(", ")}`, electronStatus.ok],
     ["WebGAL engine", WEBGAL_DIR, fssync.existsSync(path.join(WEBGAL_DIR, "packages", "webgal", "package.json"))],
     ["WebGAL node_modules", path.join(WEBGAL_DIR, "node_modules"), fssync.existsSync(path.join(WEBGAL_DIR, "node_modules"))],
     ["WebGAL parser", path.join(WEBGAL_DIR, "packages", "parser", "build", "es", "index.js"), fssync.existsSync(path.join(WEBGAL_DIR, "packages", "parser", "build", "es", "index.js"))]

@@ -4,7 +4,7 @@ const { app, BrowserWindow, ipcMain, shell } = require("electron");
 const fs = require("node:fs");
 const fsp = fs.promises;
 const path = require("node:path");
-const { spawn } = require("node:child_process");
+const { spawn, spawnSync } = require("node:child_process");
 
 const ROOT_DIR = resolveRootDir();
 const NODE = process.env.GALCODE_NODE || findNode() || "node";
@@ -24,6 +24,37 @@ app.whenReady().then(() => {
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });
+
+// Never leave task processes behind when the GUI exits: on Windows the
+// orphaned node/electron/vite processes keep ports and file locks held,
+// which previously broke subsequent launches and even blocked deleting the
+// project folder.
+app.on("before-quit", () => {
+  if (activeChild) {
+    killChildTree(activeChild);
+    activeChild = null;
+  }
+});
+
+// Kill a spawned child and, on Windows, its whole process tree. Node's
+// child.kill() only reaches the direct child; grandchildren such as the
+// vite dev server behind `npm run dev` would survive as orphans.
+function killChildTree(child) {
+  if (!child || child.killed || child.exitCode !== null) return;
+  if (process.platform === "win32" && child.pid) {
+    try {
+      spawnSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore", windowsHide: true });
+      return;
+    } catch {
+      // fall through to the plain signal below
+    }
+  }
+  try {
+    child.kill("SIGTERM");
+  } catch {
+    // process already exited
+  }
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -75,6 +106,7 @@ ipcMain.handle("galcode:save-config", async (_event, config) => {
 
 ipcMain.handle("galcode:run", async (event, task) => {
   if (activeChild) throw new Error("已有任务正在运行，请先停止或等待完成。");
+  if (task?.kind === "install") return scheduleDependencyRepair(event, task);
   const id = task.id || `task-${Date.now()}`;
   const command = await buildTaskCommand(task);
   sendLog(id, [
@@ -116,7 +148,7 @@ ipcMain.handle("galcode:run", async (event, task) => {
 
 ipcMain.handle("galcode:stop", async () => {
   if (!activeChild) return { ok: true };
-  activeChild.kill("SIGTERM");
+  killChildTree(activeChild);
   activeChild = null;
   return { ok: true };
 });
@@ -128,20 +160,34 @@ ipcMain.handle("galcode:open-path", async (_event, targetPath) => {
   return { ok: true };
 });
 
+// "修复依赖" reinstalls node_modules/electron — the very runtime this window
+// is running on. Wiping it underneath the running GUI leaves a half-deleted,
+// bricked dist on Windows (the locked electron.exe survives while .pak files
+// get removed, and every later launch then opens a blank window). Defer the
+// repair to the next launch instead: the bootstrap runs it before Electron
+// starts, while no file locks are held.
+async function scheduleDependencyRepair(event, task) {
+  const id = task.id || `task-${Date.now()}`;
+  const marker = path.join(ROOT_DIR, ".galcode", "pending-repair");
+  await fsp.mkdir(path.dirname(marker), { recursive: true });
+  await fsp.writeFile(marker, `${JSON.stringify({ requestedAt: new Date().toISOString() }, null, 2)}\n`, "utf8");
+  sendLog(id, [
+    "已预约依赖修复。",
+    "修复需要重装 Electron 运行时，而本窗口正运行在该运行时之上，直接修复会损坏运行时，导致启动器之后只能打开空壳窗口。",
+    "本窗口将在几秒后自动关闭；请重新运行 start.bat，修复会在启动时、Electron 加载之前自动完成。",
+    ""
+  ].join("\n"));
+  event.sender.send("galcode:task-done", { id, code: 0 });
+  setTimeout(() => app.quit(), 4000);
+  return { ok: true, id, deferred: true };
+}
+
 async function buildTaskCommand(task) {
   if (task.kind === "doctor") {
     return {
       command: NODE,
       args: [path.join(ROOT_DIR, "scripts", "galcode-bootstrap.mjs"), "doctor"],
       label: "galcode doctor",
-      electronGpu: normalizeElectronGpuMode(process.env.GALCODE_ELECTRON_GPU || defaultElectronGpuMode())
-    };
-  }
-  if (task.kind === "install") {
-    return {
-      command: NODE,
-      args: [path.join(ROOT_DIR, "scripts", "galcode-bootstrap.mjs"), "install", "--force"],
-      label: "galcode install --force",
       electronGpu: normalizeElectronGpuMode(process.env.GALCODE_ELECTRON_GPU || defaultElectronGpuMode())
     };
   }

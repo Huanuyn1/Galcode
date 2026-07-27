@@ -6,7 +6,7 @@ import net from "node:net";
 import { createHash } from "node:crypto";
 import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 // Cross-platform helpers.  Code is shared across macOS / Linux / Windows;
@@ -33,6 +33,28 @@ async function safeRmDir(target) {
   }
 }
 
+// Kill a spawned child and, on Windows, its whole process tree. Node's
+// child.kill() only reaches the direct child; on Windows grandchildren
+// (the vite dev server behind `npm run dev`, a crashed electron recorder)
+// would survive as orphans and keep holding ports and file locks, which
+// breaks later runs and even blocks deleting the project folder.
+function killChildTree(child, signal = "SIGTERM") {
+  if (!child || child.killed || child.exitCode !== null) return;
+  if (isWindows && child.pid) {
+    try {
+      spawnSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore", windowsHide: true });
+      return;
+    } catch {
+      // fall through to the plain signal below
+    }
+  }
+  try {
+    child.kill(signal);
+  } catch {
+    // process already exited
+  }
+}
+
 async function findElectronBinary() {
   if (process.env.ELECTRON && fssync.existsSync(process.env.ELECTRON)) {
     assertElectronRuntimeComplete(process.env.ELECTRON);
@@ -55,17 +77,36 @@ async function findElectronBinary() {
   return await commandExists("electron") ? "electron" : "";
 }
 
+// Chromium data files every Electron dist ships. A dist reduced to just the
+// launcher binary still starts but immediately dies (Windows: exit -1 with no
+// output) or opens blank windows, so check these before recording.
+const ELECTRON_RUNTIME_DATA_FILES = [
+  "resources.pak",
+  "chrome_100_percent.pak",
+  "chrome_200_percent.pak",
+  "icudtl.dat",
+  path.join("locales", "en-US.pak")
+];
+
 function assertElectronRuntimeComplete(electronPath) {
-  if (!isMac || !electronPath.includes("Electron.app/Contents/MacOS/Electron")) return;
-  const framework = path.join(
-    path.dirname(electronPath),
-    "..",
-    "Frameworks",
-    "Electron Framework.framework",
-    "Electron Framework"
-  );
-  if (!fssync.existsSync(framework)) {
-    throw new Error("Electron install is incomplete: Electron Framework.framework is missing. Run `./install.sh` or reinstall dependencies with `npm install --include=optional`.");
+  const distDir = path.dirname(electronPath);
+  if (electronPath.includes("Electron.app/Contents/MacOS/Electron")) {
+    const framework = path.join(
+      distDir,
+      "..",
+      "Frameworks",
+      "Electron Framework.framework",
+      "Electron Framework"
+    );
+    if (!fssync.existsSync(framework)) {
+      throw new Error("Electron install is incomplete: Electron Framework.framework is missing. Run `./install.sh` or reinstall dependencies with `npm install --include=optional`.");
+    }
+    return;
+  }
+  if (isMac) return; // custom non-app binary on macOS: nothing to validate
+  const missing = ELECTRON_RUNTIME_DATA_FILES.filter((rel) => !fssync.existsSync(path.join(distDir, rel)));
+  if (missing.length > 0) {
+    throw new Error(`Electron runtime is incomplete (missing: ${missing.join(", ")}). Run install.bat on Windows or ./install.sh on Unix to repair it.`);
   }
 }
 
@@ -2835,7 +2876,7 @@ async function recordProject(projectDir, flags) {
   if (!hasFfmpeg) {
     console.warn(`${ffmpegCommand} was not found. Skipping video recording.`);
     console.warn(`Preview URL: ${url}`);
-    if (autoServer?.child) autoServer.child.kill("SIGTERM");
+    if (autoServer?.child) killChildTree(autoServer.child);
     return;
   }
 
@@ -2849,7 +2890,7 @@ async function recordProject(projectDir, flags) {
     try {
       await recordWithElectronOffscreen(url, { width, height, duration, fps, out, flags });
     } finally {
-      if (autoServer?.child) autoServer.child.kill("SIGTERM");
+      if (autoServer?.child) killChildTree(autoServer.child);
     }
     await mixBGM(projectDir, out, flags);
     console.log(`Recorded ${out}`);
@@ -2862,7 +2903,7 @@ async function recordProject(projectDir, flags) {
   } catch {
     console.warn("Playwright is not installed. Run `npm install` before recording.");
     console.warn(`Preview URL: ${url}`);
-    if (autoServer?.child) autoServer.child.kill("SIGTERM");
+    if (autoServer?.child) killChildTree(autoServer.child);
     return;
   }
 
@@ -2883,7 +2924,7 @@ async function recordProject(projectDir, flags) {
     }
   } finally {
     await browser.close().catch(() => {});
-    if (autoServer?.child) autoServer.child.kill("SIGTERM");
+    if (autoServer?.child) killChildTree(autoServer.child);
   }
   await mixBGM(projectDir, out, flags);
   console.log(`Recorded ${out}`);
@@ -3047,8 +3088,8 @@ function runRecorderProcess(command, args, options = {}) {
     let timedOut = false;
     const timer = timeoutMs > 0 ? setTimeout(() => {
       timedOut = true;
-      child.kill("SIGTERM");
-      setTimeout(() => child.kill("SIGKILL"), 5000).unref();
+      killChildTree(child);
+      if (!isWindows) setTimeout(() => child.kill("SIGKILL"), 5000).unref();
     }, timeoutMs) : null;
     let stderr = "";
     if (quietWithOutput && child.stderr) {
@@ -3218,7 +3259,7 @@ async function startWebGALPreview(projectDir, flags) {
   try {
     await waitForUrl(url, Number(flags.webgalTimeout || 60000));
   } catch (error) {
-    child.kill("SIGTERM");
+    killChildTree(child);
     throw error;
   }
   console.log(`Auto-started WebGAL preview: ${url}`);
