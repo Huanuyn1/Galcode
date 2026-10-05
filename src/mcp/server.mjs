@@ -167,7 +167,7 @@ const RESOURCE_DEFS = [
   { uri: "galcode://characters", name: "Galcode characters", mimeType: "application/json", description: "Character keys, aliases, and lightweight writing notes." },
   { uri: "galcode://assets", name: "Galcode asset summary", mimeType: "application/json", description: "Available asset ids and metadata; does not include copyrighted file contents." },
   { uri: "galcode://story-schema", name: "Galcode story schema", mimeType: "application/json", description: "Structured story JSON shape expected by galcode_compile_story." },
-  { uri: "galcode://webgal-rules", name: "Galcode WebGAL rules", mimeType: "text/plain", description: "Rules for positions, figure actions, dialogue, and recording-friendly scripts." },
+  { uri: "galcode://webgal-rules", name: "Galcode WebGAL rules", mimeType: "text/plain", description: "Rules for positions, figure actions, dialogue, and engine-compatible scripts." },
   { uri: "galcode://style-guide", name: "Galcode style guide", mimeType: "text/plain", description: "Creative guidance for the host AI while iterating a story with the user." },
   { uri: "galcode://examples", name: "Galcode examples", mimeType: "application/json", description: "Small story JSON examples for the host model." },
   { uri: "galcode://runtime-status", name: "Galcode runtime status", mimeType: "application/json", description: "Local dependency and runtime availability summary." }
@@ -198,9 +198,9 @@ const PROMPT_DEFS = [
   },
   {
     name: "galcode_render_debug",
-    description: "Help diagnose a failed compile or render job using Galcode logs.",
+    description: "Help diagnose a failed compile or preview job using Galcode logs.",
     arguments: [
-      { name: "log", description: "Job or recorder log excerpt.", required: true }
+      { name: "log", description: "Job or preview server log excerpt.", required: true }
     ]
   }
 ];
@@ -362,44 +362,25 @@ function toolDefinitions() {
       }
     },
     {
-      name: "galcode_render_video",
-      description: "Render/record an existing Galcode project to final.mp4 as a background job.",
+      name: "galcode_preview_start",
+      description: "Start a local WebGAL preview server for a compiled Galcode project as a tracked background job. Returns the preview URL once the server is up.",
       inputSchema: {
         type: "object",
         required: ["projectDir"],
         properties: {
           projectDir: { type: "string", description: "Compiled project directory under the project root." },
-          videoOut: { type: "string", description: "Output mp4 path. Defaults to <projectDir>/final.mp4." },
-          duration: { type: "number", description: "Target seconds." },
-          fps: { type: "number", description: "Output fps. Defaults to 60." },
-          width: { type: "number", description: "Video width. Defaults to 1280." },
-          height: { type: "number", description: "Video height. Defaults to 720." },
-          capture: { type: "string", enum: ["electron", "screenshot", "frames", "playwright-video", "video", "avfoundation"], description: "Capture backend. Defaults to electron." },
-          electronGpu: { type: "string", enum: ["auto", "hardware", "software", "swiftshader"], description: "Electron GPU mode." },
-          noBgm: { type: "boolean", description: "Disable BGM post-mix." }
+          port: { type: "number", description: "Port for the preview server. Defaults to a free port starting at 3000." }
         }
       }
     },
     {
-      name: "galcode_job_status",
-      description: "Read status and tail logs for a background render job.",
+      name: "galcode_preview_stop",
+      description: "Stop a running preview server job started by galcode_preview_start.",
       inputSchema: {
         type: "object",
         required: ["jobId"],
         properties: {
-          jobId: { type: "string" },
-          tailBytes: { type: "number", description: "Log tail size. Defaults to 8000 bytes." }
-        }
-      }
-    },
-    {
-      name: "galcode_cancel_job",
-      description: "Cancel a currently running background render job.",
-      inputSchema: {
-        type: "object",
-        required: ["jobId"],
-        properties: {
-          jobId: { type: "string" }
+          jobId: { type: "string", description: "Job id returned by galcode_preview_start." }
         }
       }
     },
@@ -432,7 +413,7 @@ function toolDefinitions() {
       inputSchema: {
         type: "object",
         properties: {
-          jobId: { type: "string", description: "MCP job id returned by galcode_render_video." },
+          jobId: { type: "string", description: "MCP job id returned by galcode_preview_start." },
           logPath: { type: "string", description: "Log path under the Galcode project root." },
           tailBytes: { type: "number", description: "Bytes to read from the end of the log. Defaults to 12000." }
         }
@@ -444,9 +425,8 @@ function toolDefinitions() {
 async function callTool(name, args) {
   if (name === "galcode_validate_story") return asText(await validateStoryTool(args));
   if (name === "galcode_compile_story") return asText(await compileStoryTool(args));
-  if (name === "galcode_render_video") return asText(await renderVideoTool(args));
-  if (name === "galcode_job_status") return asText(await jobStatusTool(args));
-  if (name === "galcode_cancel_job") return asText(await cancelJobTool(args));
+  if (name === "galcode_preview_start") return asText(await previewStartTool(args));
+  if (name === "galcode_preview_stop") return asText(await previewStopTool(args));
   if (name === "galcode_list_outputs") return asText(await listOutputsTool(args));
   if (name === "galcode_read_output") return asText(await readOutputTool(args));
   if (name === "galcode_read_log") return asText(await readLogTool(args));
@@ -509,7 +489,7 @@ function getPrompt(name, args) {
     return promptText("Fix the Galcode story JSON according to these validation errors. Prefer changing invalid asset ids/actions over changing the user's story intent. Return only JSON.", args.errors || "");
   }
   if (name === "galcode_render_debug") {
-    return promptText("Diagnose this Galcode render or compile log. Explain the likely cause and the next concrete command/tool call to try.", args.log || "");
+    return promptText("Diagnose this Galcode compile or preview log. Explain the likely cause and the next concrete command/tool call to try.", args.log || "");
   }
   throw new Error(`Unknown prompt: ${name}`);
 }
@@ -562,40 +542,23 @@ async function compileStoryTool(args) {
   };
 }
 
-async function renderVideoTool(args) {
+async function previewStartTool(args) {
   const projectDir = resolveInsideRoot(requiredString(args.projectDir, "projectDir"));
-  if (!fssync.existsSync(path.join(projectDir, "story.json"))) {
-    throw new Error(`Not a Galcode project directory: ${projectDir}`);
+  if (!fssync.existsSync(path.join(projectDir, "game", "scene", "start.txt"))) {
+    throw new Error(`Not a compiled Galcode project directory: ${projectDir}`);
   }
-  const videoOut = args.videoOut
-    ? resolveInsideRoot(args.videoOut)
-    : path.join(projectDir, "final.mp4");
-  await ensureDir(path.dirname(videoOut));
-  const jobId = `render-${timestampSlug()}-${randomUUID().slice(0, 8)}`;
+  const jobId = `preview-${timestampSlug()}-${randomUUID().slice(0, 8)}`;
   const logPath = path.join(JOB_DIR, `${jobId}.log`);
   const jobPath = path.join(JOB_DIR, `${jobId}.json`);
   await ensureDir(JOB_DIR);
-  const commandArgs = [
-    "record",
-    projectDir,
-    "--capture",
-    String(args.capture || "electron"),
-    "--video-out",
-    videoOut
-  ];
-  if (args.duration) commandArgs.push("--duration", String(args.duration));
-  if (args.fps) commandArgs.push("--fps", String(args.fps));
-  if (args.width) commandArgs.push("--width", String(args.width));
-  if (args.height) commandArgs.push("--height", String(args.height));
-  if (args.electronGpu) commandArgs.push("--electron-gpu", String(args.electronGpu));
-  if (args.noBgm) commandArgs.push("--no-bgm");
+  const commandArgs = ["preview", projectDir];
+  if (args.port) commandArgs.push("--port", String(args.port));
 
   const job = {
     id: jobId,
-    type: "render",
-    status: "running",
+    type: "preview",
+    status: "starting",
     projectDir,
-    videoOut,
     logPath,
     command: ["node", GALCODE_BIN, ...commandArgs],
     startedAt: new Date().toISOString()
@@ -621,56 +584,91 @@ async function renderVideoTool(args) {
     await log.close().catch(() => {});
     const finished = {
       ...job,
-      status: code === 0 ? "completed" : "failed",
+      status: code === 0 ? "stopped" : "failed",
       exitCode: code,
       signal,
       finishedAt: new Date().toISOString()
     };
     await writeJson(jobPath, finished).catch(() => {});
   });
+
+  const url = await new Promise((resolve, reject) => {
+    let buffer = "";
+    const cleanup = () => {
+      clearTimeout(timer);
+      child.stdout.off("data", onData);
+      child.off("exit", onExit);
+    };
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error(`Preview server did not report a URL within 90s. See log: ${logPath}`));
+    }, 90000);
+    const onData = (chunk) => {
+      buffer += chunk.toString();
+      const match = buffer.match(/Preview URL: (https?:\/\/\S+)/);
+      if (match) {
+        cleanup();
+        resolve(match[1]);
+      }
+    };
+    const onExit = (code) => {
+      cleanup();
+      reject(new Error(`Preview server exited before reporting a URL (code ${code}). See log: ${logPath}`));
+    };
+    child.stdout.on("data", onData);
+    child.on("exit", onExit);
+  }).catch((error) => {
+    child.kill("SIGTERM");
+    throw error;
+  });
+
+  // vite can briefly 404 while it re-optimizes dependencies on cold start;
+  // only report the URL once it serves the page a few times in a row.
+  const readyDeadline = Date.now() + 20000;
+  let stableHits = 0;
+  while (Date.now() < readyDeadline && stableHits < 3) {
+    const ok = await fetch(url).then((response) => response.ok).catch(() => false);
+    stableHits = ok ? stableHits + 1 : 0;
+    if (stableHits >= 3) break;
+    await new Promise((resolve) => setTimeout(resolve, 600));
+  }
+
+  job.status = "running";
+  job.url = url;
+  await writeJson(jobPath, job);
   return {
     ok: true,
     jobId,
     status: "running",
     projectDir,
-    videoOut,
+    url,
     logPath,
-    message: "Render job started. Use galcode_job_status to follow progress."
+    message: "Preview server is running. Use galcode_preview_stop to stop it."
   };
 }
 
-async function jobStatusTool(args) {
-  const jobId = requiredString(args.jobId, "jobId");
-  const tailBytes = boundedBytes(args.tailBytes, 8000);
-  const jobPath = path.join(JOB_DIR, `${safeName(jobId)}.json`);
-  if (!isInside(JOB_DIR, jobPath) || !fssync.existsSync(jobPath)) throw new Error(`Unknown job: ${jobId}`);
-  const job = JSON.parse(await fs.readFile(jobPath, "utf8"));
-  const active = runningJobs.has(jobId);
-  return {
-    ...job,
-    active,
-    logTail: await readTail(job.logPath, tailBytes)
-  };
-}
-
-async function cancelJobTool(args) {
+async function previewStopTool(args) {
   const jobId = requiredString(args.jobId, "jobId");
   const child = runningJobs.get(jobId);
-  const jobPath = path.join(JOB_DIR, `${safeName(jobId)}.json`);
   if (!child) {
     return {
       ok: false,
       jobId,
-      message: "Job is not active in this MCP server process. It may have finished or the server was restarted."
+      message: "Preview job is not active in this MCP server process. It may have stopped already or the server was restarted."
     };
   }
+  // `galcode preview` traps SIGTERM and tears down the dev-server process
+  // group itself, so a plain signal to the direct child is sufficient.
   child.kill("SIGTERM");
-  runningJobs.delete(jobId);
-  if (fssync.existsSync(jobPath)) {
-    const job = JSON.parse(await fs.readFile(jobPath, "utf8"));
-    await writeJson(jobPath, { ...job, status: "cancelled", finishedAt: new Date().toISOString() });
-  }
-  return { ok: true, jobId, status: "cancelled" };
+  const exited = await new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(false), 10000);
+    child.once("exit", () => {
+      clearTimeout(timer);
+      resolve(true);
+    });
+  });
+  if (!exited) child.kill("SIGKILL");
+  return { ok: true, jobId, status: "stopped" };
 }
 
 async function listOutputsTool(args) {
@@ -926,7 +924,6 @@ async function runtimeStatus() {
     platform: process.platform,
     arch: process.arch,
     ffmpeg: await commandVersion("ffmpeg", ["-version"]),
-    electronInstalled: fssync.existsSync(path.join(ROOT_DIR, "node_modules", "electron")),
     webgalPackage: fssync.existsSync(path.join(webgalDir, "package.json")),
     webgalNodeModules: fssync.existsSync(path.join(webgalDir, "node_modules")),
     live2dRuntime: {
