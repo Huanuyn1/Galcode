@@ -35,9 +35,9 @@ async function safeRmDir(target) {
 
 // Kill a spawned child and, on Windows, its whole process tree. Node's
 // child.kill() only reaches the direct child; on Windows grandchildren
-// (the vite dev server behind `npm run dev`, a crashed electron recorder)
-// would survive as orphans and keep holding ports and file locks, which
-// breaks later runs and even blocks deleting the project folder.
+// (the vite dev server behind `npm run dev`) would survive as orphans
+// and keep holding ports and file locks, which breaks later runs and
+// even blocks deleting the project folder.
 function killChildTree(child, signal = "SIGTERM") {
   if (!child || child.killed || child.exitCode !== null) return;
   if (isWindows && child.pid) {
@@ -53,66 +53,6 @@ function killChildTree(child, signal = "SIGTERM") {
   } catch {
     // process already exited
   }
-}
-
-async function findElectronBinary() {
-  if (process.env.ELECTRON && fssync.existsSync(process.env.ELECTRON)) {
-    assertElectronRuntimeComplete(process.env.ELECTRON);
-    return process.env.ELECTRON;
-  }
-  const candidates = isWindows
-    ? ["node_modules/electron/dist/electron.exe"]
-    : isMac
-    ? ["node_modules/electron/dist/Electron.app/Contents/MacOS/Electron"]
-    : ["node_modules/electron/dist/electron"];
-  for (const c of candidates) {
-    const resolved = path.resolve(c);
-    if (fssync.existsSync(resolved)) {
-      assertElectronRuntimeComplete(resolved);
-      return resolved;
-    }
-  }
-  const shim = path.resolve(isWindows ? "node_modules/.bin/electron.cmd" : "node_modules/.bin/electron");
-  if (fssync.existsSync(shim)) return shim;
-  return await commandExists("electron") ? "electron" : "";
-}
-
-// Chromium data files every Electron dist ships. A dist reduced to just the
-// launcher binary still starts but immediately dies (Windows: exit -1 with no
-// output) or opens blank windows, so check these before recording.
-const ELECTRON_RUNTIME_DATA_FILES = [
-  "resources.pak",
-  "chrome_100_percent.pak",
-  "chrome_200_percent.pak",
-  "icudtl.dat",
-  path.join("locales", "en-US.pak")
-];
-
-function assertElectronRuntimeComplete(electronPath) {
-  const distDir = path.dirname(electronPath);
-  if (electronPath.includes("Electron.app/Contents/MacOS/Electron")) {
-    const framework = path.join(
-      distDir,
-      "..",
-      "Frameworks",
-      "Electron Framework.framework",
-      "Electron Framework"
-    );
-    if (!fssync.existsSync(framework)) {
-      throw new Error("Electron install is incomplete: Electron Framework.framework is missing. Run `./install.sh` or reinstall dependencies with `npm install --include=optional`.");
-    }
-    return;
-  }
-  if (isMac) return; // custom non-app binary on macOS: nothing to validate
-  const missing = ELECTRON_RUNTIME_DATA_FILES.filter((rel) => !fssync.existsSync(path.join(distDir, rel)));
-  if (missing.length > 0) {
-    throw new Error(`Electron runtime is incomplete (missing: ${missing.join(", ")}). Run install.bat on Windows or ./install.sh on Unix to repair it.`);
-  }
-}
-
-function resolveToolsBin() {
-  const toolsBin = path.resolve("tools/bin");
-  return fssync.existsSync(toolsBin) ? toolsBin : "";
 }
 
 const DEFAULT_ENGINE_REPO = "https://github.com/OpenWebGAL/WebGAL.git";
@@ -350,8 +290,6 @@ export async function main(argv) {
   if (!command) return agentCommand(flags);
 
   if (command === "agent" || command === "chat" || command === "interactive") return agentCommand(flags);
-  if (command === "gui" || command === "app" || command === "/gui") return guiCommand(flags, positionals);
-  if (command === "init") return initConfig(flags);
   if (command === "configure") return configureCommand(flags);
   if (command === "setup") return setupRepos(flags);
   if (command === "download-assets") return downloadAssetsCommand(flags);
@@ -362,7 +300,6 @@ export async function main(argv) {
   if (command === "yolo") return makeCommand({ ...flags, mode: "yolo" });
   if (command === "make") return makeCommand(flags);
   if (command === "compile") return compileCommand(flags, positionals);
-  if (command === "record") return recordCommand(flags, positionals);
 
   throw new Error(`Unknown command: ${command}`);
 }
@@ -413,25 +350,20 @@ function printHelp() {
 
 Usage:
   galcode
-  galcode gui
-  galcode /gui
   galcode agent
-  galcode init
   galcode configure
   galcode setup --root vendor
   galcode download-assets --target mygoxmujica
   galcode install-live2d-runtime --from /path/to/live2d-sdk-lib
   galcode prepare-live2d --limit 4
   galcode index --out work/asset-manifest.json
-  galcode discuss --record
-  galcode yolo --record
+  galcode discuss
+  galcode yolo
   galcode make --mode yolo --theme "灯和爱音雨夜和解" --duration 180
   galcode compile story.json --assets work/asset-manifest.json --out outputs/story
-  galcode record outputs/story --url http://localhost:3000
 
 Modes:
-  gui,/gui  Open the graphical Galcode app.
-  agent     Interactive AI director. Chat, brainstorm, generate, compile, record.
+  agent     Interactive AI director. Chat, brainstorm, generate, compile.
   discuss   Ask you a few creative-direction questions, then AI writes the work.
   yolo      No questions. AI chooses direction and writes the work.
 
@@ -439,21 +371,6 @@ AI environment:
   OPENAI_API_KEY       Required for real AI generation, or run galcode configure.
   OPENAI_MODEL         Defaults to gpt-4.1-mini.
   OPENAI_BASE_URL      Defaults to https://api.openai.com/v1.
-
-Recording:
-  Requires Electron and ffmpeg. If no --url is provided, Galcode starts the local
-  WebGAL preview for the generated project and records that page. If WebGAL cannot
-  start, recording fails with setup instructions instead of silently recording a
-  fallback page. Pass --allow-fallback-preview to record preview.html for debugging.
-  Default recording FPS is 60. Use --fps <n> to override.
-  --duration <seconds> is honored as the target video duration when provided.
-  Add --stop-on-title only if you want recording to end early at the title screen.
-  For Windows GPU/driver crashes, try --electron-gpu software. Modes:
-  auto, hardware, software, swiftshader. Windows defaults to auto.
-  --electron-gpu software also passes Electron startup GPU/sandbox switches.
-  Recommended capture backend is --capture electron: cross-platform background
-  Chromium offscreen rendering. --capture avfoundation is macOS-only visible
-  screen capture; --capture screenshot is a deterministic fallback.
 
 Publishing:
   Add --publish-to <webgal-game-dir> to copy generated game files into a WebGAL
@@ -469,60 +386,13 @@ Live2D:
   into .galcode/live2d-cache and mounts them under game/figure/live2d.
   Add --no-live2d to disable it, or --live2d-limit <n> to change the count.
   WebGAL also needs Live2D runtime files in public/lib:
-  live2d.min.js and live2dcubismcore.min.js. Use install-live2d-runtime --from <dir>,
-  or pass --live2d-runtime-dir <dir> while recording.
+  live2d.min.js and live2dcubismcore.min.js. Use install-live2d-runtime --from <dir>.
   Public release packages do not bundle Live2D SDK/runtime or official model assets.
 
 Unstable network:
   Use download-assets instead of git clone. It downloads GitHub zip files with
   curl -C - so rerunning the command resumes partial downloads.
 `);
-}
-
-async function guiCommand(flags, positionals) {
-  const bootstrap = path.join(PROJECT_ROOT, "scripts", "galcode-bootstrap.mjs");
-  if (!fssync.existsSync(bootstrap)) {
-    throw new Error(`GUI bootstrap was not found: ${bootstrap}`);
-  }
-  await run(process.execPath, [bootstrap, "gui", "--", ...positionals, ...flagsToArgv(flags)], {
-    cwd: PROJECT_ROOT,
-    env: {
-      ...process.env,
-      GALCODE_ROOT: PROJECT_ROOT
-    }
-  });
-}
-
-function flagsToArgv(flags) {
-  const argv = [];
-  for (const [key, value] of Object.entries(flags)) {
-    if (value === false || value === undefined || value === null) continue;
-    argv.push(`--${toKebab(key)}`);
-    if (value !== true) argv.push(String(value));
-  }
-  return argv;
-}
-
-async function initConfig(flags) {
-  const target = path.resolve(flags.out || "galcode.config.json");
-  await ensureDir(path.dirname(target));
-  const config = {
-    name: "Galcode",
-    engineRepo: DEFAULT_ENGINE_REPO,
-    assetArchiveRepo: DEFAULT_ARCHIVE_REPO,
-    staticArchiveRepo: DEFAULT_STATIC_ARCHIVE_REPO,
-    engineDir: "vendor/WebGAL",
-    assetArchiveDir: "figure",
-    staticArchiveDir: "vendor/mygo-mujica-archive",
-    manifest: "work/asset-manifest.json",
-    outputsDir: "outputs",
-    ai: {
-      model: "${OPENAI_MODEL:-gpt-4.1-mini}",
-      baseUrl: "${OPENAI_BASE_URL:-https://api.openai.com/v1}"
-    }
-  };
-  await writeJson(target, config);
-  console.log(`Wrote ${target}`);
 }
 
 async function configureCommand(flags) {
@@ -558,13 +428,6 @@ async function loadLocalConfig(flags) {
   if (!process.env.OPENAI_API_KEY && config.openaiApiKey) process.env.OPENAI_API_KEY = config.openaiApiKey;
   if (!process.env.OPENAI_MODEL && config.openaiModel) process.env.OPENAI_MODEL = config.openaiModel;
   if (!process.env.OPENAI_BASE_URL && config.openaiBaseUrl) process.env.OPENAI_BASE_URL = config.openaiBaseUrl;
-  if (config.electronGpu && !hasAnyFlag(flags, ["electronGpu", "electronGpuMode", "gpuMode", "gpu", "disableGpu", "softwareRendering", "cpuRendering"])) {
-    flags.electronGpu = config.electronGpu;
-  }
-}
-
-function hasAnyFlag(flags, keys) {
-  return keys.some((key) => flags[key] !== undefined);
 }
 
 async function loadDotEnv(file) {
@@ -610,7 +473,7 @@ async function agentCommand(flags = {}) {
   const rl = readline.createInterface({ input, output });
   try {
     console.log("Galcode Agent");
-    console.log("交互式 WebGAL 二创工作台。输入想法与 AI 讨论，用 /generate 生成成片。输入 /help 查看命令。");
+    console.log("交互式 WebGAL 二创工作台。输入想法与 AI 讨论，用 /generate 生成 WebGAL 工程。输入 /help 查看命令。");
     console.log("");
     printAgentHelp();
 
@@ -637,11 +500,6 @@ async function agentCommand(flags = {}) {
       if (["/quit", "/exit", "quit", "exit"].includes(line)) break;
       if (line === "/help") {
         printAgentHelp();
-        continue;
-      }
-      if (line === "/gui") {
-        console.log("正在启动 Galcode GUI。关闭 GUI 后会回到当前 CLI 会话。");
-        await guiCommand(flags, []);
         continue;
       }
       if (line === "/config") {
@@ -719,10 +577,9 @@ function printAgentHelp() {
   console.log([
     "命令：",
     "  直接输入想法        与 AI 导演多轮讨论，打磨你的二创故事",
-    "  /gui                启动图形界面，关闭后回到 CLI",
     "  /brainstorm 主题    先让 AI 给 3 个二创方向",
     "  /make 主题          设定主题、角色、时长后开始讨论",
-    "  /generate           根据讨论内容生成 WebGAL 工程 + 录制视频",
+    "  /generate           根据讨论内容生成 WebGAL 工程",
     "  /yolo               跳过讨论，直接生成（AI 自由发挥）",
     "  /settings           查看直接输入想法时使用的角色、口味、时长等参数",
     "  /set duration 90    设置直接输入想法的目标时长；也支持 /set tone、/set characters、/set constraints",
@@ -730,9 +587,9 @@ function printAgentHelp() {
     "  /config             重新配置 API key / 模型 / Base URL",
     "  /quit               退出",
     "",
-    "工作流：输入想法 → AI 与你讨论打磨 → /generate 生成成片",
+    "工作流：输入想法 → AI 与你讨论打磨 → /generate 生成 WebGAL 工程",
     "讨论过程中 AI 导演不会直接输出脚本，而是陪你反复推敲剧情。",
-    "当你觉得方向清晰了，输入 /generate 即可调用管线生成成片。"
+    "当你觉得方向清晰了，输入 /generate 生成工程，再用 galcode preview <目录> 在浏览器中预览。"
   ].join("\n"));
 }
 
@@ -885,13 +742,11 @@ async function runAgentCreation(rl, baseFlags, brief, mode) {
   console.log(`主题：${brief.theme}`);
   console.log(`角色：${brief.characters}`);
   console.log(`时长：${brief.durationSec}s`);
-  const shouldRecord = await rl.question("生成后录制 mp4 吗？[Y/n] ");
   const outName = await rl.question("输出目录名？直接回车自动命名： ");
   const outDir = path.resolve(outName.trim() || path.join("outputs", timestampSlug("agent")));
   const flags = {
     ...baseFlags,
     mode,
-    record: !/^n/i.test(shouldRecord.trim()),
     out: outDir,
     duration: brief.durationSec
   };
@@ -984,10 +839,8 @@ async function continueDiscussion(rl, flags, message, history) {
 
 async function generateFromDiscussion(rl, flags, history, brief, manifest) {
   console.log("");
-  const shouldRecord = await rl.question("生成后录制 mp4 吗？[Y/n] ");
   const outName = await rl.question("输出目录名？直接回车自动命名： ");
   const outDir = path.resolve(outName.trim() || path.join("outputs", timestampSlug("discuss")));
-  const record = !/^n/i.test(shouldRecord.trim());
 
   console.log("");
   console.log("正在根据讨论内容生成剧本……");
@@ -1043,10 +896,6 @@ async function generateFromDiscussion(rl, flags, history, brief, manifest) {
   await ensureDir(outDir);
   await writeJson(storyPath, story);
   await compileStory(story, manifest || emptyManifest(), outDir, flags);
-
-  if (record) {
-    await recordProject(outDir, flags);
-  }
 
   console.log("");
   console.log(`Galcode project ready: ${outDir}`);
@@ -1201,7 +1050,7 @@ async function makeCommand(flags) {
   // 生成完成后自动进入交互讨论模式，方便迭代验证
   console.log("");
   console.log("── 进入迭代讨论模式 ──");
-  console.log(`刚才生成的成片在：${outDir}`);
+  console.log(`刚才生成的工程在：${outDir}`);
   console.log("可以继续讨论修改方向，输入 /generate 重新生成。");
   flags.lastOutDir = outDir;
   return agentCommand(flags);
@@ -1224,10 +1073,6 @@ async function createProjectFromBrief({ brief, mode, flags, outDir }) {
   const storyPath = path.join(outDir, "story.json");
   await writeJson(storyPath, story);
   await compileStory(story, manifest, outDir, flags);
-
-  if (flags.record) {
-    await recordProject(outDir, flags);
-  }
 
   console.log(`Galcode project ready: ${outDir}`);
   return { outDir, storyPath, manifestPath };
@@ -1271,11 +1116,6 @@ async function compileCommand(flags, positionals) {
   manifest = await prepareLive2DAssets(manifest, flags, { theme: story.title, characters: (story.characters || []).join(" ") });
   await compileStory(story, manifest, outDir, flags);
   console.log(`Compiled WebGAL project: ${outDir}`);
-}
-
-async function recordCommand(flags, positionals) {
-  const projectDir = path.resolve(positionals[0] || flags.project || ".");
-  await recordProject(projectDir, flags);
 }
 
 async function askCreativeBrief(flags) {
@@ -2291,11 +2131,11 @@ async function compileStory(story, manifest, outDir, flags) {
       clock += Math.max(0, dur);
     }
   }
-  // 始终保存真实时间线时长，供录制和 BGM 混音使用
+  // 始终保存真实时间线时长，供预览与二次编辑参考
   story._timeline = timeline;
   story._totalDurationSec = clock + 15; // 留 15 秒缓冲（end 动画 + WebGAL 过渡）
 
-  // Resolve and copy BGM assets so they're available for post-processing
+  // Resolve and copy BGM assets into the game directory
   if (story.bgm) {
     for (const bgm of story.bgm) {
       // Resolve assetPath from assetName if not already set
@@ -2435,10 +2275,6 @@ function positionFlag(position) {
 function figureId(position) {
   // .jsonl aggregate model lookup needs -id to match motion/expression state
   return position === "left" ? "fig-left" : position === "right" ? "fig-right" : "fig-center";
-}
-
-function live2DTransform(position) {
-  return { xScale: 1, yScale: 1, xOffset: 0, yOffset: 0 };
 }
 
 async function copyAssetForWebGAL(asset, gameDir, subdir, copied) {
@@ -2751,464 +2587,13 @@ Generated by Galcode.
 - Suggested title: \`title.txt\`
 - Suggested description: \`description.txt\`
 
-To record an already running WebGAL page:
+To preview this project in the WebGAL engine:
 
 \`\`\`bash
-galcode record ${outDir} --url http://localhost:3000 --duration ${story.durationSec || 180}
+galcode preview ${outDir}
 \`\`\`
 `;
   await fs.writeFile(path.join(outDir, "README.md"), readme, "utf8");
-}
-
-async function mixBGM(projectDir, videoOut, flags = {}) {
-  if (flags.noBgm) return;
-  const storyPath = path.join(projectDir, "story.json");
-  if (!fssync.existsSync(storyPath)) return;
-  let story;
-  try { story = JSON.parse(await fs.readFile(storyPath, "utf8")); } catch { return; }
-  if (!story.bgm || !story.bgm.length) return;
-
-  // Find BGM files — prefer paths copied during compile, fall back to assetPath
-  const bgmEntries = story.bgm.filter((b) => {
-    const p = b._copiedPath || b.assetPath;
-    return p && fssync.existsSync(p);
-  });
-  if (!bgmEntries.length) return;
-
-  // Use total duration from timeline, or fall back to story.durationSec
-  const totalSec = story._totalDurationSec || story.durationSec || 60;
-
-  // Build ffmpeg filter chain per BGM segment
-  const bgmLabels = [];
-  const filterParts = [];
-  const inputFiles = [];
-
-  for (let i = 0; i < bgmEntries.length; i++) {
-    const bgm = bgmEntries[i];
-    const src = bgm._copiedPath || bgm.assetPath;
-    const start = Number(bgm.startSec || 0);
-    const end = Math.min(Number(bgm.endSec || totalSec), totalSec);
-    const dur = end - start;
-    if (dur <= 0) continue;
-    const vol = Number(bgm.volume ?? 0.3);
-    const fadeIn = Number(bgm.fadeIn || 1);
-    const fadeOut = Number(bgm.fadeOut || 2);
-    const fadeOutStart = Math.max(0, dur - fadeOut);
-
-    inputFiles.push(src);
-    const inIdx = inputFiles.length; // 1-based for ffmpeg -i counting (0 is video)
-    const label = `bgm${i}`;
-    bgmLabels.push(label);
-
-    // atrim → afade in → afade out → volume → label
-    filterParts.push(
-      `[${inIdx}:a]atrim=${start}:${end},asetpts=PTS-STARTPTS,afade=t=in:d=${fadeIn},afade=t=out:st=${fadeOutStart.toFixed(1)}:d=${fadeOut},volume=${vol}[${label}]`
-    );
-  }
-
-  if (!filterParts.length) return;
-
-  const mixInputs = bgmLabels.map((l) => `[${l}]`).join("");
-  filterParts.push(`${mixInputs}amix=inputs=${bgmLabels.length}:duration=longest:normalize=0[aout]`);
-
-  const filterComplex = filterParts.join(";");
-
-  // Build ffmpeg command
-  const tmpOut = videoOut.replace(/\.mp4$/, ".tmp.mp4");
-  const ffmpegArgs = [
-    "-y",
-    "-i", videoOut,
-    ...inputFiles.flatMap((f) => ["-i", f]),
-    "-filter_complex", filterComplex,
-    "-map", "0:v",
-    "-map", "[aout]",
-    "-c:v", "copy",
-    "-c:a", "aac",
-    "-shortest",
-    tmpOut
-  ];
-
-  console.log(`Mixing BGM: ${bgmEntries.length} track(s)`);
-  try {
-    await run("ffmpeg", ffmpegArgs);
-    await fs.rename(tmpOut, videoOut);
-    console.log("BGM mix complete");
-  } catch (err) {
-    console.warn(`BGM mix failed (video kept without audio): ${err.message}`);
-  }
-}
-
-async function recordProject(projectDir, flags) {
-  // An explicit CLI duration is a recording contract.  If it is absent, fall
-  // back to the compiled story timeline.
-  const storyDuration = await readStoryDuration(projectDir);
-  const duration = Number(flags.duration || flags.durationSec || storyDuration || 180);
-  const out = path.resolve(flags.videoOut || path.join(projectDir, "final.mp4"));
-  let autoServer = null;
-  let url = flags.url || "";
-  if (!url && !flags.previewOnly) {
-    autoServer = await startWebGALPreview(projectDir, flags).catch((error) => {
-      if (error.galcodeFatal) throw error;
-      if (flags.allowFallbackPreview) {
-        console.warn(`Could not auto-start WebGAL preview: ${error.message}`);
-        console.warn("Falling back to preview.html because --allow-fallback-preview was passed.");
-        return null;
-      }
-      throw new Error([
-        `Could not auto-start WebGAL preview: ${error.message}`,
-        "Run `install.bat` on Windows (or `./install.sh` on Unix) to install WebGAL dependencies,",
-        "then retry recording. For debugging only, pass --allow-fallback-preview."
-      ].join(" "));
-    });
-    if (autoServer) url = autoServer.url;
-  }
-  if (!url) {
-    if (flags.previewOnly || flags.allowFallbackPreview) {
-      url = pathToFileUrl(path.join(projectDir, "preview.html"));
-    } else {
-      throw new Error("No WebGAL URL is available for recording.");
-    }
-  }
-  const size = flags.size || "1280x720";
-
-  const ffmpegCommand = flags.ffmpeg || "ffmpeg";
-  const hasFfmpeg = await commandExists(ffmpegCommand);
-  if (!hasFfmpeg) {
-    console.warn(`${ffmpegCommand} was not found. Skipping video recording.`);
-    console.warn(`Preview URL: ${url}`);
-    if (autoServer?.child) killChildTree(autoServer.child);
-    return;
-  }
-
-  const [width, height] = size.split("x").map(Number);
-  const fps = Number(flags.fps || 60);
-  await ensureDir(path.dirname(out));
-  await fs.rm(out, { force: true });
-  const captureMode = String(flags.capture || flags.captureMode || (flags.screenshot ? "screenshot" : "electron")).toLowerCase();
-
-  if (captureMode === "electron" || captureMode === "offscreen" || captureMode === "electron-offscreen") {
-    try {
-      await recordWithElectronOffscreen(url, { width, height, duration, fps, out, flags });
-    } finally {
-      if (autoServer?.child) killChildTree(autoServer.child);
-    }
-    await mixBGM(projectDir, out, flags);
-    console.log(`Recorded ${out}`);
-    return;
-  }
-
-  let chromium;
-  try {
-    ({ chromium } = await import("playwright"));
-  } catch {
-    console.warn("Playwright is not installed. Run `npm install` before recording.");
-    console.warn(`Preview URL: ${url}`);
-    if (autoServer?.child) killChildTree(autoServer.child);
-    return;
-  }
-
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), `galcode-${captureMode.replace(/[^a-z0-9]+/g, "-")}-`));
-  const browser = await chromium.launch({
-    headless: captureMode === "avfoundation" ? false : true,
-    args: captureMode === "avfoundation" ? [`--window-size=${width},${height}`, "--window-position=0,0"] : []
-  });
-  try {
-    if (captureMode === "playwright-video" || captureMode === "video") {
-      await recordWithPlaywrightVideo(browser, url, { width, height, duration, out, tempDir, flags });
-    } else if (captureMode === "avfoundation") {
-      await recordWithAVFoundation(browser, url, { width, height, duration, fps, out, flags });
-    } else if (captureMode === "screenshot" || captureMode === "frames") {
-      await recordWithScreenshots(browser, url, { width, height, duration, fps, out, tempDir, flags });
-    } else {
-      throw new Error(`Unknown capture mode: ${captureMode}`);
-    }
-  } finally {
-    await browser.close().catch(() => {});
-    if (autoServer?.child) killChildTree(autoServer.child);
-  }
-  await mixBGM(projectDir, out, flags);
-  console.log(`Recorded ${out}`);
-}
-
-async function prepareRecordPage(page, url, { width, height, flags }) {
-  await page.goto(url, { waitUntil: "domcontentloaded" });
-  await page.waitForTimeout(500);
-  if (flags.noAutoplay) return;
-  const bodyText = await page.locator("body").innerText({ timeout: 1500 }).catch(() => "");
-  if (bodyText.includes("LANGUAGE SELECT")) {
-    const clickedLanguage = await clickFirstVisibleText(page, ["简体", "简体中文", "中文"]);
-    if (!clickedLanguage) await page.mouse.click(Math.floor(width * 0.085), Math.floor(height * 0.55)).catch(() => {});
-    await page.waitForTimeout(1000);
-  }
-  await page.mouse.click(Math.floor(width / 2), Math.floor(height / 2)).catch(() => {});
-  await page.keyboard.press("Space").catch(() => {});
-  await page.waitForTimeout(1000);
-  const clickedMenu = await clickFirstVisibleText(page, ["开始游戏", "继续游戏", "COMMENCER", "CONTINUER", "开始", "继续", "START", "CONTINUE"]);
-  if (!clickedMenu) await page.mouse.click(Math.floor(width * 0.14), Math.floor(height * 0.265)).catch(() => {});
-  await page.waitForTimeout(600);
-  const stillOnTitle = await page.locator("body").innerText({ timeout: 1500 }).catch(() => "");
-  if (/开始游戏|COMMENCER|START/.test(stillOnTitle)) {
-    await page.mouse.click(Math.floor(width * 0.14), Math.floor(height * 0.265)).catch(() => {});
-  }
-  await page.waitForTimeout(Number(flags.startDelay || 1500));
-}
-
-async function recordWithPlaywrightVideo(browser, url, { width, height, duration, out, tempDir, flags }) {
-  const context = await browser.newContext({
-    viewport: { width, height },
-    deviceScaleFactor: 1,
-    recordVideo: {
-      dir: tempDir,
-      size: { width, height }
-    }
-  });
-  let videoFile = "";
-  try {
-    const page = await context.newPage();
-    await prepareRecordPage(page, url, { width, height, flags });
-    await page.waitForTimeout(Math.max(0, duration * 1000));
-    const video = page.video();
-    await page.close();
-    videoFile = await video.path();
-  } finally {
-    await context.close().catch(() => {});
-  }
-  if (!videoFile) throw new Error("Playwright did not produce a video file.");
-  await run("ffmpeg", [
-    "-y",
-    "-i", videoFile,
-    "-r", String(Number(flags.fps || 60)),
-    "-pix_fmt", "yuv420p",
-    "-c:v", "libx264",
-    out
-  ]);
-}
-
-async function recordWithElectronOffscreen(url, { width, height, duration, fps, out, flags }) {
-  const electron = await findElectronBinary();
-  if (!electron) {
-    throw new Error("Electron is not installed. Run `npm install electron --save-optional`, then retry with `galcode record ... --capture electron`.");
-  }
-  const script = path.resolve("src/electron-recorder.cjs");
-  if (!fssync.existsSync(script)) throw new Error(`Electron recorder script not found: ${script}`);
-  const gpuMode = resolveElectronGpuMode(flags);
-  const gpuAttempts = gpuMode === "auto" ? ["hardware", "software"] : [gpuMode];
-  let lastError = null;
-
-  for (let index = 0; index < gpuAttempts.length; index += 1) {
-    const attemptMode = gpuAttempts[index];
-    if (index > 0) console.warn(`Retrying Electron recorder with --electron-gpu ${attemptMode} after GPU-mode failure.`);
-    const electronSwitches = electronLaunchSwitchesForGpuMode(attemptMode, flags);
-    try {
-      await runRecorderProcess(electron, [
-        ...electronSwitches,
-        script,
-        "--url", url,
-        "--out", out,
-        "--duration", String(duration),
-        "--fps", String(fps),
-        "--width", String(width),
-        "--height", String(height),
-        "--ffmpeg", flags.ffmpeg || "ffmpeg",
-        "--start-delay", String(flags.startDelay || 1500),
-        "--scene-delay", String(flags.sceneDelay || 8000),
-        "--click-interval", String(flags.clickInterval || 3000),
-        "--electron-gpu", attemptMode,
-        ...(flags.noAutoplay ? ["--no-autoplay"] : []),
-        ...(flags.stopOnTitle ? ["--stop-on-title"] : [])
-      ], {
-        quietWithOutput: !flags.electronLogs,
-        timeoutMs: Number(flags.recordTimeout || Math.max(180000, duration * 2000 + 180000)),
-        env: {
-          ...process.env,
-          GALCODE_ELECTRON_GPU: attemptMode,
-          ELECTRON_ENABLE_LOGGING: flags.electronLogs ? "1" : process.env.ELECTRON_ENABLE_LOGGING || "",
-          PATH: [resolveToolsBin(), process.env.PATH || ""].filter(Boolean).join(path.delimiter)
-        }
-      });
-      return;
-    } catch (error) {
-      lastError = error;
-      if (index >= gpuAttempts.length - 1) break;
-    }
-  }
-
-  throw lastError;
-}
-
-function resolveElectronGpuMode(flags) {
-  if (flags.disableGpu || flags.softwareRendering || flags.cpuRendering) return "software";
-  const raw = flags.electronGpu || flags.electronGpuMode || flags.gpuMode || flags.gpu || process.env.GALCODE_ELECTRON_GPU || (process.platform === "win32" ? "auto" : "hardware");
-  const mode = String(raw).toLowerCase();
-  if (mode === "auto") return "auto";
-  if (mode === "cpu" || mode === "software" || mode === "off" || mode === "disabled" || mode === "false" || mode === "0") return "software";
-  if (mode === "swiftshader" || mode === "swift-shader") return "swiftshader";
-  if (mode === "hardware" || mode === "gpu" || mode === "on" || mode === "true" || mode === "1") return "hardware";
-  throw new Error(`Unknown --electron-gpu mode: ${raw}. Use auto, hardware, software, or swiftshader.`);
-}
-
-function electronLaunchSwitchesForGpuMode(mode, flags) {
-  const switches = [];
-  const wantsNoSandbox = flags.electronNoSandbox || flags.noSandbox || (process.platform === "win32" && (mode === "software" || mode === "swiftshader"));
-  if (wantsNoSandbox) {
-    switches.push("--no-sandbox", "--disable-gpu-sandbox");
-  }
-
-  if (mode === "software") {
-    switches.push(
-      "--disable-gpu",
-      "--disable-gpu-compositing",
-      "--disable-gpu-rasterization",
-      "--disable-accelerated-2d-canvas",
-      "--disable-accelerated-video-decode"
-    );
-  } else if (mode === "swiftshader") {
-    switches.push(
-      "--enable-unsafe-swiftshader",
-      "--use-angle=swiftshader",
-      "--use-gl=swiftshader"
-    );
-  }
-
-  return switches;
-}
-
-function runRecorderProcess(command, args, options = {}) {
-  return new Promise((resolve, reject) => {
-    console.log(`$ ${command} ${args.join(" ")}`);
-    const outIndex = args.indexOf("--out");
-    const outFile = outIndex >= 0 ? args[outIndex + 1] : "";
-    const quietWithOutput = Boolean(options.quietWithOutput);
-    const timeoutMs = Number(options.timeoutMs || 0);
-    const { quietWithOutput: _quietWithOutput, timeoutMs: _timeoutMs, ...spawnOptions } = options;
-    const child = spawn(command, args, {
-      stdio: quietWithOutput ? ["ignore", "ignore", "pipe"] : "inherit",
-      ...spawnOptions
-    });
-    let timedOut = false;
-    const timer = timeoutMs > 0 ? setTimeout(() => {
-      timedOut = true;
-      killChildTree(child);
-      if (!isWindows) setTimeout(() => child.kill("SIGKILL"), 5000).unref();
-    }, timeoutMs) : null;
-    let stderr = "";
-    if (quietWithOutput && child.stderr) {
-      child.stderr.setEncoding("utf8");
-      child.stderr.on("data", (chunk) => {
-        stderr += chunk;
-        if (stderr.length > 120000) stderr = stderr.slice(-120000);
-      });
-    }
-    child.on("error", reject);
-    child.on("exit", (code, signal) => {
-      if (timer) clearTimeout(timer);
-      const stat = outFile ? fssync.statSync(outFile, { throwIfNoEntry: false }) : null;
-      // Check for partial success regardless of exit code
-      if (stat?.size > 0) {
-        if (code !== 0 && !quietWithOutput) {
-          console.warn(`Recorder exited with ${formatExitStatus(code, signal)}, but output video was written: ${outFile}`);
-        }
-        return resolve();
-      }
-      if (timedOut) {
-        if (stderr) console.error(stderr.trim());
-        return reject(new Error(`${command} timed out after ${timeoutMs} ms`));
-      }
-      if (code === 0) {
-        if (stderr) console.error(stderr.trim());
-        return reject(new Error(`Recorder exited successfully but did not write output: ${outFile}`));
-      }
-      if (stderr) console.error(stderr.trim());
-      reject(new Error(`${command} exited with ${formatExitStatus(code, signal)}`));
-    });
-  });
-}
-
-function formatExitStatus(code, signal) {
-  if (code === null || code === undefined) return String(signal || "unknown");
-  if (code > 0x7fffffff) return `${code} (${code - 0x100000000})`;
-  return String(code);
-}
-
-async function recordWithAVFoundation(browser, url, { width, height, duration, fps, out, flags }) {
-  const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
-  await prepareRecordPage(page, url, { width, height, flags });
-  const device = String(flags.avfoundationDevice || flags.captureDevice || "1:none");
-  const args = [
-    "-y",
-    "-f", "avfoundation",
-    "-framerate", String(fps),
-    "-capture_cursor", "0",
-    "-capture_mouse_clicks", "0",
-    "-i", device,
-    "-t", String(duration),
-    "-r", String(fps),
-    "-pix_fmt", "yuv420p",
-    "-c:v", "libx264",
-    out
-  ];
-  console.log(`AVFoundation capture device: ${device}`);
-  await run("ffmpeg", args);
-}
-
-async function recordWithScreenshots(browser, url, { width, height, duration, fps, out, tempDir, flags }) {
-  const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
-  await prepareRecordPage(page, url, { width, height, flags });
-  const frameClock = await createFrameClock(page, flags, fps);
-  console.log(`Capture clock: ${frameClock.mode}`);
-  const frameCount = Math.ceil(duration * fps);
-  for (let frame = 0; frame < frameCount; frame += 1) {
-    const file = path.join(tempDir, `frame-${String(frame).padStart(6, "0")}.png`);
-    await frameClock.step();
-    await screenshotWithRetry(page, file);
-  }
-  await frameClock.close();
-  await run("ffmpeg", [
-    "-y",
-    "-framerate", String(fps),
-    "-i", path.join(tempDir, "frame-%06d.png"),
-    "-r", String(fps),
-    "-pix_fmt", "yuv420p",
-    "-c:v", "libx264",
-    out
-  ]);
-}
-
-async function createFrameClock(page, flags, fps) {
-  const frameMs = 1000 / fps;
-  if (flags.realtimeCapture) {
-    return {
-      mode: `realtime ${fps}fps`,
-      step: () => page.waitForTimeout(frameMs),
-      close: async () => {}
-    };
-  }
-
-  try {
-    const client = await page.context().newCDPSession(page);
-    await client.send("Emulation.setVirtualTimePolicy", { policy: "pause" });
-    return {
-      mode: `virtual-time ${fps}fps`,
-      step: async () => {
-        await client.send("Emulation.setVirtualTimePolicy", {
-          policy: "advance",
-          budget: frameMs,
-          maxVirtualTimeTaskStarvationCount: 100
-        });
-      },
-      close: async () => {
-        await client.send("Emulation.setVirtualTimePolicy", { policy: "pause" }).catch(() => {});
-        await client.detach().catch(() => {});
-      }
-    };
-  } catch (error) {
-    console.warn(`Chromium virtual time is unavailable; falling back to realtime capture: ${error.message}`);
-    return {
-      mode: `realtime ${fps}fps fallback`,
-      step: () => page.waitForTimeout(frameMs),
-      close: async () => {}
-    };
-  }
 }
 
 async function startWebGALPreview(projectDir, flags) {
@@ -3230,7 +2615,7 @@ async function startWebGALPreview(projectDir, flags) {
     if (flags.installWebgalDeps) {
       await run("npm", ["install", "--legacy-peer-deps", "--include=dev"], { cwd: webgalWorkspaceRoot });
     } else {
-      throw new Error("WebGAL dependencies are not installed. Run `install.bat` on Windows, `./install.sh` on Unix, or run `galcode record ... --install-webgal-deps` once.");
+      throw new Error("WebGAL dependencies are not installed. Run `install.bat` on Windows, `./install.sh` on Unix, or run `galcode preview ... --install-webgal-deps` once.");
     }
   }
 
@@ -3301,7 +2686,7 @@ async function ensureLive2DRuntime(webgalDir, gameDir, flags = {}) {
     "These files are not bundled because the Live2D SDK/runtime is copyrighted.",
     `Put ${LIVE2D_RUNTIME_FILES.join(" and ")} into ${libDir},`,
     "or run `galcode install-live2d-runtime --from <dir>` after obtaining the Live2D runtime files.",
-    "Without these files WebGAL disables Live2D and the recorded video will not show models."
+    "Without these files WebGAL disables Live2D and the preview will not show models."
   ].join(" ");
 
   console.warn(message);
@@ -3405,49 +2790,6 @@ async function waitForUrl(url, timeoutMs) {
   throw new Error(`Timed out waiting for ${url}`);
 }
 
-async function screenshotWithRetry(page, file) {
-  let lastError;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    try {
-      await page.screenshot({ path: file, timeout: 10000 });
-      return;
-    } catch (error) {
-      lastError = error;
-      await page.waitForTimeout(300);
-    }
-  }
-  throw lastError;
-}
-
-async function clickFirstVisibleText(page, texts) {
-  for (const text of texts) {
-    try {
-      const locator = page.getByText(text, { exact: false }).first();
-      await locator.click({ timeout: 1500 });
-      return true;
-    } catch {
-      // Try the next label.
-    }
-  }
-  return false;
-}
-
-async function readStoryDuration(projectDir) {
-  const storyPath = path.join(projectDir, "story.json");
-  if (!fssync.existsSync(storyPath)) return 0;
-  const story = JSON.parse(await fs.readFile(storyPath, "utf8"));
-  // 优先使用编译时计算的真实时间线时长，AI 声明的 durationSec 仅供参考
-  return Number(story._totalDurationSec || story.durationSec || 0);
-}
-
-async function commandExists(command) {
-  return new Promise((resolve) => {
-    const child = spawn(command, ["-version"], { stdio: "ignore" });
-    child.on("error", () => resolve(false));
-    child.on("exit", (code) => resolve(code === 0));
-  });
-}
-
 function run(command, args, options = {}) {
   return new Promise((resolve, reject) => {
     console.log(`$ ${command} ${args.join(" ")}`);
@@ -3459,10 +2801,6 @@ function run(command, args, options = {}) {
       else reject(new Error(`${command} exited with ${code}`));
     });
   });
-}
-
-function npmCommand() {
-  return npmInvocation().command;
 }
 
 function npmInvocation() {
@@ -3652,10 +2990,6 @@ function shortHash(value) {
 
 function timestampSlug(mode) {
   return `${mode}-${new Date().toISOString().replace(/[:.]/g, "-")}`;
-}
-
-function pathToFileUrl(file) {
-  return `file://${path.resolve(file).split(path.sep).map(encodeURIComponent).join("/")}`;
 }
 
 function htmlEscape(value) {

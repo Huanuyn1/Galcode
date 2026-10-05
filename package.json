@@ -1,7 +1,7 @@
 {
   "name": "galcode",
   "version": "0.1.0",
-  "description": "AI-assisted CLI pipeline for generating MyGO/Ave Mujica WebGAL fan works and recording them as videos.",
+  "description": "AI-assisted CLI pipeline for generating MyGO/Ave Mujica WebGAL fan works.",
   "type": "module",
   "bin": {
     "galcode": "./bin/galcode.js",
@@ -14,24 +14,10 @@
     "demo": "node ./bin/galcode.js yolo --offline --out outputs/demo",
     "install:all": "node ./scripts/galcode-bootstrap.mjs install",
     "start:cli": "node ./scripts/galcode-bootstrap.mjs start",
-    "start:app": "node ./scripts/galcode-bootstrap.mjs gui",
-    "gui": "node ./scripts/galcode-bootstrap.mjs gui",
-    "doctor": "node ./scripts/galcode-bootstrap.mjs doctor",
-    "build:launcher": "node ./scripts/build-native-launcher.mjs --target current",
-    "build:launcher:all": "node ./scripts/build-native-launcher.mjs --target all",
-    "package:release": "node ./scripts/package-release.mjs --target universal",
-    "package:current": "node ./scripts/package-release.mjs --target current",
-    "package:all": "node ./scripts/package-release.mjs --target all"
+    "doctor": "node ./scripts/galcode-bootstrap.mjs doctor"
   },
   "engines": {
-    "node": ">=20"
+    "node": "^22.19 || >=24"
   },
-  "optionalDependencies": {
-    "electron": "^37.10.3",
-    "playwright": "^1.54.0"
-  },
-  "license": "MIT",
-  "devDependencies": {
-    "@yao-pkg/pkg": "^6.20.0"
-  }
+  "license": "MIT"
 }
