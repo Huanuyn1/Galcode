@@ -33,11 +33,14 @@ async function safeRmDir(target) {
   }
 }
 
-// Kill a spawned child and, on Windows, its whole process tree. Node's
-// child.kill() only reaches the direct child; on Windows grandchildren
-// (the vite dev server behind `npm run dev`) would survive as orphans
-// and keep holding ports and file locks, which breaks later runs and
-// even blocks deleting the project folder.
+// Kill a spawned child and its whole process tree. Node's child.kill()
+// only reaches the direct child; grandchildren (the vite dev server behind
+// `npm run dev`) would survive as orphans and keep holding ports and file
+// locks, which breaks later runs and even blocks deleting the project
+// folder. Windows uses taskkill /T; POSIX signals the child's process
+// group (server children are spawned detached so they lead their own
+// group; for non-detached children the group signal just fails and we
+// fall back to the plain signal).
 function killChildTree(child, signal = "SIGTERM") {
   if (!child || child.killed || child.exitCode !== null) return;
   if (isWindows && child.pid) {
@@ -46,6 +49,14 @@ function killChildTree(child, signal = "SIGTERM") {
       return;
     } catch {
       // fall through to the plain signal below
+    }
+  }
+  if (!isWindows && child.pid) {
+    try {
+      process.kill(-child.pid, signal);
+      return;
+    } catch {
+      // not a process-group leader; fall through to the plain signal below
     }
   }
   try {
@@ -300,6 +311,7 @@ export async function main(argv) {
   if (command === "yolo") return makeCommand({ ...flags, mode: "yolo" });
   if (command === "make") return makeCommand(flags);
   if (command === "compile") return compileCommand(flags, positionals);
+  if (command === "preview") return previewCommand(flags, positionals);
 
   throw new Error(`Unknown command: ${command}`);
 }
@@ -361,6 +373,7 @@ Usage:
   galcode yolo
   galcode make --mode yolo --theme "灯和爱音雨夜和解" --duration 180
   galcode compile story.json --assets work/asset-manifest.json --out outputs/story
+  galcode preview outputs/story --port 3000
 
 Modes:
   agent     Interactive AI director. Chat, brainstorm, generate, compile.
@@ -371,6 +384,13 @@ AI environment:
   OPENAI_API_KEY       Required for real AI generation, or run galcode configure.
   OPENAI_MODEL         Defaults to gpt-4.1-mini.
   OPENAI_BASE_URL      Defaults to https://api.openai.com/v1.
+
+Preview:
+  galcode preview <projectDir> [--port N] [--host 127.0.0.1]
+  Copies the compiled project into the WebGAL engine under vendor/ and starts
+  the Vite dev server. Press Ctrl+C to stop. If engine dependencies are
+  missing, run ./install.sh (install.bat on Windows) first, or pass
+  --install-webgal-deps once.
 
 Publishing:
   Add --publish-to <webgal-game-dir> to copy generated game files into a WebGAL
@@ -803,7 +823,7 @@ async function startDiscussion(rl, flags, brief, manifest, history) {
   console.log(`目标时长：${brief.durationSec || flags.duration || 180}s`);
   if (brief.tone) console.log(`情绪/口味：${brief.tone}`);
   console.log("");
-  console.log("── 开始讨论（输入 /generate 生成成片，输入其他内容继续讨论）──");
+  console.log("── 开始讨论（输入 /generate 生成工程，输入其他内容继续讨论）──");
   console.log("");
 
   const firstMessage = JSON.stringify({
@@ -899,6 +919,7 @@ async function generateFromDiscussion(rl, flags, history, brief, manifest) {
 
   console.log("");
   console.log(`Galcode project ready: ${outDir}`);
+  console.log(`Preview it with: galcode preview ${outDir}`);
   return { outDir, storyPath };
 }
 
@@ -1075,6 +1096,7 @@ async function createProjectFromBrief({ brief, mode, flags, outDir }) {
   await compileStory(story, manifest, outDir, flags);
 
   console.log(`Galcode project ready: ${outDir}`);
+  console.log(`Preview it with: galcode preview ${outDir}`);
   return { outDir, storyPath, manifestPath };
 }
 
@@ -1134,7 +1156,7 @@ async function askCreativeBrief(flags) {
     const theme = await rl.question("想写什么方向/梗/情绪？ ");
     const characters = await rl.question("想让哪些角色登场？留空让 AI 选： ");
     const tone = await rl.question("想要什么口味？沉重/搞笑/和解/怪文书？ ");
-    const duration = await rl.question("视频目标时长秒数？默认 180： ");
+    const duration = await rl.question("目标时长秒数？默认 180： ");
     const constraints = await rl.question("有什么雷点或禁止事项？ ");
     return {
       theme: theme || "MyGO 成员在一次排练前后重新确认彼此的位置",
@@ -2596,6 +2618,33 @@ galcode preview ${outDir}
   await fs.writeFile(path.join(outDir, "README.md"), readme, "utf8");
 }
 
+async function previewCommand(flags, positionals) {
+  const projectDir = path.resolve(positionals[0] || flags.project || ".");
+  if (!fssync.existsSync(path.join(projectDir, "game", "scene", "start.txt"))) {
+    throw new Error(`Not a compiled Galcode project: ${projectDir} (missing game/scene/start.txt — run \`galcode compile\` or \`galcode yolo\` first)`);
+  }
+  const { child, url } = await startWebGALPreview(projectDir, flags);
+  console.log("");
+  console.log(`Preview URL: ${url}`);
+  console.log("在浏览器中打开以上地址预览作品。按 Ctrl+C 停止预览服务器。");
+  await new Promise((resolve) => {
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      process.off("SIGINT", onSignal);
+      process.off("SIGTERM", onSignal);
+      killChildTree(child);
+      resolve();
+    };
+    const onSignal = () => finish();
+    process.on("SIGINT", onSignal);
+    process.on("SIGTERM", onSignal);
+    child.on("exit", () => finish());
+  });
+  console.log("WebGAL 预览服务器已停止。");
+}
+
 async function startWebGALPreview(projectDir, flags) {
   const webgalDir = path.resolve(flags.webgalDir || "vendor/webgal-mygo/packages/webgal");
   const webgalWorkspaceRoot = path.resolve(webgalDir, "..", "..");
@@ -2631,23 +2680,28 @@ async function startWebGALPreview(projectDir, flags) {
   await ensureWebGALRuntimeFiles(sourceGameDir);
   await copyDir(sourceGameDir, publicGameDir);
   await ensureLive2DRuntime(webgalDir, sourceGameDir, flags);
+  const host = String(flags.host || "127.0.0.1");
   const port = Number(flags.port || await findOpenPort(3000));
   const npm = npmInvocation();
-  const npmDev = normalizeSpawnCommand(npm.command, [...npm.args, "run", "dev", "--", "--host", "127.0.0.1", "--port", String(port)]);
+  // --strictPort: never let vite silently move to another port; otherwise
+  // waitForUrl could bind to a stale server from a previous run.
+  const npmDev = normalizeSpawnCommand(npm.command, [...npm.args, "run", "dev", "--", "--host", host, "--port", String(port), "--strictPort"]);
   const child = spawn(npmDev.command, npmDev.args, {
     cwd: webgalDir,
     stdio: flags.webgalLogs ? "inherit" : "ignore",
-    env: { ...process.env, BROWSER: "none" }
+    env: { ...process.env, BROWSER: "none" },
+    // POSIX: lead a process group so killChildTree can reach vite
+    detached: !isWindows
   });
   child.on("error", () => {});
-  const url = `http://127.0.0.1:${port}`;
+  const displayHost = host === "0.0.0.0" || host === "::" ? "127.0.0.1" : host;
+  const url = `http://${displayHost}:${port}`;
   try {
     await waitForUrl(url, Number(flags.webgalTimeout || 60000));
   } catch (error) {
     killChildTree(child);
     throw error;
   }
-  console.log(`Auto-started WebGAL preview: ${url}`);
   return { child, url };
 }
 
