@@ -1,0 +1,23 @@
+* text=auto eol=lf
+
+# Binary assets
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.mp3 binary
+*.wav binary
+*.ogg binary
+*.m4s binary
+*.mp4 binary
+*.zip binary
+*.exe binary
+*.dll binary
+*.pak binary
+*.dat binary
+*.bin binary
+*.asar binary
+*.moc binary
+*.mtn binary
+*.dnni binary
