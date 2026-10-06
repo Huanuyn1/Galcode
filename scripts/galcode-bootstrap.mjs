@@ -95,9 +95,10 @@ function printHeader(title) {
 }
 
 function assertNodeVersion() {
-  const major = Number(process.versions.node.split(".")[0]);
-  if (!Number.isFinite(major) || major < 20) {
-    throw new Error(`Node.js 20 or newer is required. Current version: ${process.version}`);
+  const [major, minor] = process.versions.node.split(".").map((part) => Number(part));
+  const ok = major >= 24 || (major === 22 && minor >= 19);
+  if (!ok) {
+    throw new Error(`Node.js ^22.19 or >=24 is required. Current version: ${process.version}`);
   }
 }
 

@@ -11,17 +11,24 @@ if exist "%ROOT_DIR%\tools\bin\node.exe" (
 ) else (
   where node >nul 2>nul
   if errorlevel 1 (
-    echo Galcode needs Node.js 20 or newer, but node.exe was not found.
+    echo Galcode needs Node.js 22.19+ or 24+, but node.exe was not found.
     echo Install Node.js LTS from https://nodejs.org and reopen PowerShell.
     exit /b 127
   )
   set "NODE=node"
 )
 
-for /f "delims=" %%v in ('"%NODE%" -e "process.stdout.write(process.versions.node.split('.')[0])"') do set "NODE_MAJOR=%%v"
-if %NODE_MAJOR% LSS 20 (
+for /f "tokens=1,2 delims=." %%a in ('"%NODE%" -e "process.stdout.write(process.versions.node)"') do (
+  set "NODE_MAJOR=%%a"
+  set "NODE_MINOR=%%b"
+)
+set "NODE_OK=1"
+if %NODE_MAJOR% LSS 22 set "NODE_OK=0"
+if %NODE_MAJOR% EQU 22 if %NODE_MINOR% LSS 19 set "NODE_OK=0"
+if %NODE_MAJOR% EQU 23 set "NODE_OK=0"
+if "%NODE_OK%"=="0" (
   for /f "delims=" %%v in ('"%NODE%" --version') do set "NODE_VERSION=%%v"
-  echo Galcode needs Node.js 20 or newer. Current version is %NODE_VERSION%.
+  echo Galcode needs Node.js 22.19+ or 24+. Current version is %NODE_VERSION%.
   exit /b 1
 )
 

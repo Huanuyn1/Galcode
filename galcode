@@ -9,14 +9,17 @@ if [[ -x "$ROOT_DIR/tools/bin/node" ]]; then
 elif command -v node >/dev/null 2>&1; then
   NODE="$(command -v node)"
 else
-  echo "Galcode needs Node.js >=20, but no Node runtime was found." >&2
+  echo "Galcode needs Node.js ^22.19 or >=24, but no Node runtime was found." >&2
   echo "Install Node.js, or restore the migrated tools/bin/node runtime." >&2
   exit 127
 fi
 
-NODE_MAJOR="$("$NODE" -e "process.stdout.write(process.versions.node.split('.')[0])")"
-if [[ "$NODE_MAJOR" -lt 20 ]]; then
-  echo "Galcode needs Node.js >=20, current version is $("$NODE" --version)." >&2
+NODE_VERSION="$("$NODE" -e "process.stdout.write(process.versions.node)")"
+NODE_MAJOR="${NODE_VERSION%%.*}"
+NODE_REST="${NODE_VERSION#*.}"
+NODE_MINOR="${NODE_REST%%.*}"
+if [[ "$NODE_MAJOR" -lt 22 || ( "$NODE_MAJOR" -eq 22 && "$NODE_MINOR" -lt 19 ) || "$NODE_MAJOR" -eq 23 ]]; then
+  echo "Galcode needs Node.js ^22.19 or >=24, current version is v$NODE_VERSION." >&2
   exit 1
 fi
 

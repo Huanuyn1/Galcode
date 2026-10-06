@@ -9,7 +9,7 @@ if [[ -x "$ROOT_DIR/tools/bin/node" ]]; then
 elif command -v node >/dev/null 2>&1; then
   NODE="$(command -v node)"
 else
-  echo "Galcode needs Node.js 20 or newer."
+  echo "Galcode needs Node.js ^22.19 or >=24."
   echo "macOS: brew install node"
   echo "Linux: install nodejs/npm with your package manager or nvm."
   exit 127
