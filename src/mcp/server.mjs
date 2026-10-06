@@ -68,7 +68,7 @@ const CHARACTER_CATALOG = [
   {
     key: "umiri",
     displayName: "八幡海铃",
-    aliases: ["八幡海铃", "海铃", "Umiri"],
+    aliases: ["八幡海铃", "海铃", "海玲", "Umiri"],
     writingNotes: "Cool, observant, professional, often direct without being loud. Useful for grounding a dramatic scene with sharp clarity."
   },
   {
@@ -76,8 +76,103 @@ const CHARACTER_CATALOG = [
     displayName: "祐天寺若麦",
     aliases: ["祐天寺若麦", "若麦", "喵梦", "Nyamu"],
     writingNotes: "Playful, performative, internet-aware, but not only comic relief. Good for breaking tension or making hidden motives visible."
+  },
+  {
+    key: "mahoro",
+    displayName: "滨崎茉幌",
+    aliases: ["滨崎茉幌", "茉幌", "Mahoro"],
+    writingNotes: "millsage member (chara pack B group). Canon footing is thin in this repo — use her to widen the cast beyond MyGO/Mujica and define her voice together with the user before giving her a lead role."
+  },
+  {
+    key: "houka",
+    displayName: "和泉朋花",
+    aliases: ["和泉朋花", "朋花", "Houka"],
+    writingNotes: "millsage member (chara pack B group). Canon footing is thin in this repo — use her to widen the cast beyond MyGO/Mujica and define her voice together with the user before giving her a lead role."
+  },
+  {
+    key: "hotaru",
+    displayName: "汐见萤",
+    aliases: ["汐见萤", "萤", "Hotaru"],
+    writingNotes: "millsage member (chara pack B group). Canon footing is thin in this repo — use her to widen the cast beyond MyGO/Mujica and define her voice together with the user before giving her a lead role."
+  },
+  {
+    key: "natsume",
+    displayName: "伊泽枣",
+    aliases: ["伊泽枣", "枣", "Natsume"],
+    writingNotes: "millsage member (chara pack B group). Canon footing is thin in this repo — use her to widen the cast beyond MyGO/Mujica and define her voice together with the user before giving her a lead role."
+  },
+  {
+    key: "nagi",
+    displayName: "琴平凪",
+    aliases: ["琴平凪", "凪", "Nagi"],
+    writingNotes: "millsage member (chara pack B group). Canon footing is thin in this repo — use her to widen the cast beyond MyGO/Mujica and define her voice together with the user before giving her a lead role."
+  },
+  {
+    key: "arale",
+    displayName: "仲町阿拉蕾",
+    aliases: ["仲町阿拉蕾", "阿拉蕾", "Arale"],
+    writingNotes: "MewType member (chara pack C group); the band skews lighter and more online-native than MyGO. Good for comic beats, meta-flavored scenes, or an outsider who says the quiet thing casually."
+  },
+  {
+    key: "miyako",
+    displayName: "藤都子",
+    aliases: ["藤都子", "都子", "Miyako"],
+    writingNotes: "MewType member (chara pack C group); the band skews lighter and more online-native than MyGO. Good for comic beats, meta-flavored scenes, or an outsider who says the quiet thing casually."
+  },
+  {
+    key: "ritsu",
+    displayName: "峰月律",
+    aliases: ["峰月律", "律", "Ritsu"],
+    writingNotes: "MewType member (chara pack C group); the band skews lighter and more online-native than MyGO. Good for comic beats, meta-flavored scenes, or an outsider who says the quiet thing casually."
+  },
+  {
+    key: "nonoka",
+    displayName: "宫永野乃花",
+    aliases: ["宫永野乃花", "野乃花", "Nonoka"],
+    writingNotes: "MewType member (chara pack C group); the band skews lighter and more online-native than MyGO. Good for comic beats, meta-flavored scenes, or an outsider who says the quiet thing casually."
+  },
+  {
+    key: "yuno",
+    displayName: "千石由乃",
+    aliases: ["千石由乃", "由乃", "Yuno"],
+    writingNotes: "MewType member (chara pack C group); the band skews lighter and more online-native than MyGO. Good for comic beats, meta-flavored scenes, or an outsider who says the quiet thing casually."
+  },
+  {
+    key: "raika",
+    displayName: "须贺蕾叶",
+    aliases: ["须贺蕾叶", "蕾叶", "Raika"],
+    writingNotes: "Dumb Rock! member (chara pack D group); the band carries loud, theatrical rock energy. Use for high-contrast scenes, stage bravado, or pressure that arrives head-on instead of sideways."
+  },
+  {
+    key: "yomogi",
+    displayName: "矢仓蓬咲",
+    aliases: ["矢仓蓬咲", "臬咲", "蓬咲", "Yomogi"],
+    writingNotes: "Dumb Rock! member (chara pack D group); the band carries loud, theatrical rock energy. Use for high-contrast scenes, stage bravado, or pressure that arrives head-on instead of sideways."
+  },
+  {
+    key: "shizuku",
+    displayName: "四宫宁月",
+    aliases: ["四宫宁月", "宁月", "Shizuku"],
+    writingNotes: "Dumb Rock! member (chara pack D group); the band carries loud, theatrical rock energy. Use for high-contrast scenes, stage bravado, or pressure that arrives head-on instead of sideways."
+  },
+  {
+    key: "chieri",
+    displayName: "梅里千樱梨",
+    aliases: ["梅里千樱梨", "千樱梨", "Chieri"],
+    writingNotes: "Dumb Rock! member (chara pack D group); the band carries loud, theatrical rock energy. Use for high-contrast scenes, stage bravado, or pressure that arrives head-on instead of sideways."
+  },
+  {
+    key: "miku",
+    displayName: "马桥心玖",
+    aliases: ["马桥心玖", "心玖", "Miku"],
+    writingNotes: "Dumb Rock! member (chara pack D group); the band carries loud, theatrical rock energy. Use for high-contrast scenes, stage bravado, or pressure that arrives head-on instead of sideways."
   }
 ];
+
+// chara 包(figure/chara/,Cubism 3/4)的跨角色注册名前缀:
+// 00_ = 模型自己;A01-A10 = MyGO/Ave Mujica;B01-B05 = millsage;
+// C01-C05 = 梦限大 MewType;D01-D05 = 一家 Dumb Rock!。前缀必须完整。
+const CHARA_SHARED_NAME_PATTERN = /^(00|[ABCD]\d{2})_[^/]+\/.+/;
 
 const STORY_SCHEMA = {
   title: "string",
@@ -96,8 +191,8 @@ const STORY_SCHEMA = {
           character: "string, or 'none' to clear a position",
           assetId: "asset id from manifest, required unless character is none",
           position: "left|center|right",
-          motion: "Live2D motion name, required for Live2D assets",
-          expression: "Live2D expression name, required for Live2D assets"
+          motion: "Live2D motion name, required for Live2D assets. chara pack: native name like mtn_smile01_C, or cross-character 前缀_角色/名 like A05_素世/mtn_smile01_C",
+          expression: "Live2D expression name, required for Live2D assets. chara pack: native name like exp_smile01, or cross-character like A05_素世/exp_smile01"
         },
         { type: "line", speaker: "string", text: "string", durationSec: "number" },
         { type: "narration", text: "string", durationSec: "number" },
@@ -121,6 +216,7 @@ const WEBGAL_RULES = [
   "There are three figure positions: left, center, right. One position can hold only one character.",
   "To replace a character in a position, first send a figure action with character='none' for that position.",
   "For Live2D figure actions, use an assetId from galcode://assets and choose motion/expression from that asset.",
+  "chara pack assets (pack='chara') also accept cross-character names like A05_素世/exp_smile01 (prefix_角色/名); the prefix is mandatory and the model path always stays the acting character's own model.",
   "Do not use the same character in multiple positions at the same time.",
   "Use motion changes every few lines. A whole scene using only idle01 will look like a slide deck.",
   "Use line actions for spoken dialogue, narration actions for narration, and wait actions for dramatic pauses.",
@@ -795,11 +891,22 @@ export function validateStory(story, manifest) {
         if (asset.kind === "live2d") {
           if (!action.motion) errors.push(`${label}.motion is required for Live2D asset ${asset.id}.`);
           if (!action.expression) errors.push(`${label}.expression is required for Live2D asset ${asset.id}.`);
-          if (action.motion && Array.isArray(asset.motions) && asset.motions.length && !asset.motions.includes(action.motion)) {
-            warnings.push(`${label}.motion '${action.motion}' is not listed on asset ${asset.id}.`);
-          }
-          if (action.expression && Array.isArray(asset.expressions) && asset.expressions.length && !asset.expressions.includes(action.expression)) {
-            warnings.push(`${label}.expression '${action.expression}' is not listed on asset ${asset.id}.`);
+          for (const [field, listed] of [["motion", asset.motions], ["expression", asset.expressions]]) {
+            const value = action[field];
+            if (!value || !Array.isArray(listed) || !listed.length || listed.includes(value)) continue;
+            if (asset.pack === "chara") {
+              if (value.includes("/")) {
+                // chara 包的跨角色名字必须带完整前缀(00_/A01_…D05_);命中前缀即可用,
+                // 清单里只存原生裸名,所以不在这里核对共享库名单。
+                if (!CHARA_SHARED_NAME_PATTERN.test(value)) {
+                  errors.push(`${label}.${field} '${value}' uses a cross-character name without the required prefix (expected like A05_素世/exp_smile01).`);
+                }
+              } else {
+                warnings.push(`${label}.${field} '${value}' is not listed on asset ${asset.id}.`);
+              }
+            } else {
+              warnings.push(`${label}.${field} '${value}' is not listed on asset ${asset.id}.`);
+            }
           }
         }
       } else if (action.type === "line") {
@@ -872,8 +979,14 @@ async function assetSummary() {
     live2d: assets.filter((asset) => asset.kind === "live2d").map((asset) => ({
       ...publicAsset(asset),
       characterKey: asset.characterKey,
+      pack: asset.pack || "",
+      // chara 包:motions/expressions 是原生裸名;跨角色共享库只报数量(完整清单见 figure/chara/表情动作总表.md)
       motions: (asset.motions || []).slice(0, 32),
       expressions: (asset.expressions || []).slice(0, 32),
+      ...(asset.pack === "chara" ? {
+        sharedMotions: asset.sharedMotions || 0,
+        sharedExpressions: asset.sharedExpressions || 0
+      } : {}),
       live2dVersion: asset.live2dVersion
     })),
     characterGuide: buildCharacterGuide(assets)

@@ -20,6 +20,19 @@ const manifest = {
       relativePath: "mygo/tomori/live_default/model.json",
       motions: ["tomori_idle01", "tomori_cry01"],
       expressions: ["default", "cry01"]
+    },
+    {
+      id: "l2d-anon-chara",
+      kind: "live2d",
+      fileName: "adv_live2d_anon_002_school_winter_hs_1st.model3.json",
+      relativePath: "chara/爱音/school_winter_hs_1st/adv_live2d_anon_002_school_winter_hs_1st.model3.json",
+      pack: "chara",
+      characterKey: "anon",
+      motions: ["mtn_idle01_C", "mtn_smile01_C"],
+      expressions: ["exp_idle01", "exp_smile01"],
+      sharedMotions: 1769,
+      sharedExpressions: 867,
+      sharedPrefixBase: true
     }
   ]
 };
@@ -145,6 +158,44 @@ const cases = [
     story: withActions([{ type: "sing", text: "♪" }]),
     errors: 1,
     errorIncludes: "type is unsupported"
+  },
+  {
+    name: "chara asset accepts native names without warnings",
+    story: withActions([{ type: "figure", character: "千早爱音", assetId: "l2d-anon-chara", position: "center", motion: "mtn_smile01_C", expression: "exp_smile01" }]),
+    errors: 0,
+    warnings: 0
+  },
+  {
+    name: "chara asset accepts cross-character prefixed names",
+    story: withActions([{ type: "figure", character: "千早爱音", assetId: "l2d-anon-chara", position: "center", motion: "A03_乐奈/mtn_check01_L", expression: "A05_素世/exp_smile01" }]),
+    errors: 0,
+    warnings: 0
+  },
+  {
+    name: "chara asset accepts 00_ self-alias names",
+    story: withActions([{ type: "figure", character: "千早爱音", assetId: "l2d-anon-chara", position: "center", motion: "00_爱音/mtn_smile01_C", expression: "00_爱音/exp_smile01" }]),
+    errors: 0,
+    warnings: 0
+  },
+  {
+    name: "chara cross-character name without prefix is an error",
+    story: withActions([{ type: "figure", character: "千早爱音", assetId: "l2d-anon-chara", position: "center", motion: "mtn_smile01_C", expression: "素世/exp_smile01" }]),
+    errors: 1,
+    errorIncludes: "without the required prefix"
+  },
+  {
+    name: "chara unknown native name warns like before",
+    story: withActions([{ type: "figure", character: "千早爱音", assetId: "l2d-anon-chara", position: "center", motion: "mtn_dance99_C", expression: "exp_smile01" }]),
+    errors: 0,
+    warnings: 1,
+    warningIncludes: "is not listed on asset"
+  },
+  {
+    name: "slash name on a non-chara asset still warns instead of erroring",
+    story: withActions([{ type: "figure", character: "高松灯", assetId: "l2d-tomori", position: "center", motion: "A05_素世/mtn_smile01_C", expression: "default" }]),
+    errors: 0,
+    warnings: 1,
+    warningIncludes: "is not listed on asset"
   }
 ];
 
