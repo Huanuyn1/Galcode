@@ -62,9 +62,66 @@ const CHARACTER_CATALOG = [
   { key: "sakiko", displayName: "丰川祥子", aliases: ["丰川祥子", "豊川祥子", "祥子", "Sakiko", "Togawa Sakiko"] },
   { key: "mutsumi", displayName: "若叶睦", aliases: ["若叶睦", "若葉睦", "睦", "Mutsumi", "Wakaba Mutsumi"] },
   { key: "uika", displayName: "三角初华", aliases: ["三角初华", "三角初華", "初华", "初華", "Uika", "Misumi Uika"] },
-  { key: "umiri", displayName: "八幡海铃", aliases: ["八幡海铃", "八幡海鈴", "海铃", "海鈴", "Umiri", "Yahata Umiri"] },
-  { key: "nyamu", displayName: "祐天寺若麦", aliases: ["祐天寺若麦", "祐天寺若麥", "若麦", "若麥", "喵梦", "喵夢", "Nyamu", "Yutenji Nyamu"] }
+  { key: "umiri", displayName: "八幡海铃", aliases: ["八幡海铃", "八幡海鈴", "海铃", "海鈴", "海玲", "Umiri", "Yahata Umiri"] },
+  { key: "nyamu", displayName: "祐天寺若麦", aliases: ["祐天寺若麦", "祐天寺若麥", "若麦", "若麥", "喵梦", "喵夢", "Nyamu", "Yutenji Nyamu"] },
+  // millsage(chara 包 B 组)
+  { key: "mahoro", displayName: "滨崎茉幌", aliases: ["滨崎茉幌", "茉幌", "Mahoro", "Hamasaki Mahoro"] },
+  { key: "houka", displayName: "和泉朋花", aliases: ["和泉朋花", "朋花", "Houka", "Izumi Houka"] },
+  { key: "hotaru", displayName: "汐见萤", aliases: ["汐见萤", "汐見蛍", "萤", "蛍", "Hotaru", "Shiomi Hotaru"] },
+  { key: "natsume", displayName: "伊泽枣", aliases: ["伊泽枣", "伊澤棗", "枣", "棗", "Natsume", "Izawa Natsume"] },
+  { key: "nagi", displayName: "琴平凪", aliases: ["琴平凪", "凪", "Nagi", "Kotohira Nagi"] },
+  // 梦限大 MewType(chara 包 C 组)
+  { key: "arale", displayName: "仲町阿拉蕾", aliases: ["仲町阿拉蕾", "阿拉蕾", "Arale", "Nakamachi Arale"] },
+  { key: "miyako", displayName: "藤都子", aliases: ["藤都子", "都子", "Miyako", "Fuji Miyako"] },
+  { key: "ritsu", displayName: "峰月律", aliases: ["峰月律", "律", "Ritsu", "Minetsuki Ritsu"] },
+  { key: "nonoka", displayName: "宫永野乃花", aliases: ["宫永野乃花", "宮永野乃花", "野乃花", "Nonoka", "Miyanaga Nonoka"] },
+  { key: "yuno", displayName: "千石由乃", aliases: ["千石由乃", "由乃", "Yuno", "Sengoku Yuno"] },
+  // 一家 Dumb Rock!(chara 包 D 组)
+  { key: "raika", displayName: "须贺蕾叶", aliases: ["须贺蕾叶", "須賀蕾葉", "蕾叶", "蕾葉", "Raika", "Suga Raika"] },
+  { key: "yomogi", displayName: "矢仓蓬咲", aliases: ["矢仓蓬咲", "矢倉蓬咲", "臬咲", "蓬咲", "Yomogi", "Yakura Yomogi"] },
+  { key: "shizuku", displayName: "四宫宁月", aliases: ["四宫宁月", "四宮寧月", "宁月", "寧月", "Shizuku", "Shinomiya Shizuku"] },
+  { key: "chieri", displayName: "梅里千樱梨", aliases: ["梅里千樱梨", "梅里千櫻梨", "千樱梨", "千櫻梨", "Chieri", "Umezu Chieri"] },
+  { key: "miku", displayName: "马桥心玖", aliases: ["马桥心玖", "馬橋心玖", "心玖", "Miku", "Mabashi Miku"] }
 ];
+
+// chara 新版 Live2D 包(figure/chara/,Cubism 3/4):
+// 25 个主要角色的目录名 → 角色 key。跨角色动作/表情注册名为
+// `前缀_角色/名字`(如 A05_素世/exp_smile01),`00_角色/…` 指模型自己;
+// 共享库在 figure/chara/共享表情动作/,模型内以 ../../ 相对路径引用。
+const CHARA_SHARED_DIR = "共享表情动作";
+const CHARA_PACK_DIR_KEYS = {
+  "爱音": "anon", "灯": "tomori", "乐奈": "rana", "立希": "taki", "素世": "soyo",
+  "睦": "mutsumi", "祥子": "sakiko", "海玲": "umiri", "初华": "uika", "喵梦": "nyamu",
+  "茉幌": "mahoro", "朋花": "houka", "萤": "hotaru", "枣": "natsume", "凪": "nagi",
+  "阿拉蕾": "arale", "都子": "miyako", "律": "ritsu", "野乃花": "nonoka", "由乃": "yuno",
+  "蕾叶": "raika", "臬咲": "yomogi", "宁月": "shizuku", "千樱梨": "chieri", "心玖": "miku"
+};
+// 跨角色注册名的合法前缀:00_(自己)或 A01-A10/B01-B05/C01-C05/D01-D05。
+const CHARA_SHARED_NAME_PATTERN = /^(00|[ABCD]\d{2})_[^/]+\/.+/;
+
+// 判断路径是否位于 figure/chara/ 包内;返回包内结构信息。
+function charaPackInfo(filePath) {
+  const parts = String(filePath).split(path.sep);
+  const idx = parts.lastIndexOf("chara");
+  if (idx < 1 || parts[idx - 1] !== "figure" || parts.length <= idx + 1) return null;
+  return {
+    charaRoot: parts.slice(0, idx + 1).join(path.sep),
+    characterDir: parts[idx + 1] || "",
+    costumeDir: parts[idx + 2] || ""
+  };
+}
+
+function isCharaPackModel(filePath) {
+  const info = charaPackInfo(filePath);
+  return Boolean(info && info.characterDir && info.characterDir !== CHARA_SHARED_DIR && info.costumeDir);
+}
+
+function charaPackCharacterKey(characterDir) {
+  if (!characterDir) return "";
+  if (CHARA_PACK_DIR_KEYS[characterDir]) return CHARA_PACK_DIR_KEYS[characterDir];
+  if (/^sub_[\w-]+$/.test(characterDir)) return characterDir;
+  return canonicalCharacterKey(characterDir);
+}
 
 function resolveProjectRoot() {
   const envRoot = process.env.GALCODE_ROOT || "";
@@ -144,6 +201,23 @@ const DEFAULT_WRITER_PROMPT = [
   "",
   "同场景中切换情绪：发送 figure 动作，assetId + position 不变，仅修改 motion + expression。",
   "",
+  "=== chara 新版 Live2D 包(pack:'chara',Cubism 3/4,现在的主力资产)===",
+  "角色资产指南中 pack 为 'chara' 的模型来自新版立绘包(路径形如 chara/<角色>/<服装>/…model3.json)。",
+  "存在 chara 模型时优先使用,优于旧版模型(旧版动作名形如 anon_idle01;chara 包规则不同,不要混用!)。",
+  "chara 模型的 motion/expression 命名规则:",
+  "- 原生名(首选,推荐):该模型 motions/expressions 列表里列出的裸名,如 mtn_smile01_C、exp_smile01。",
+  "  动作名后缀 _C/_L/_R 是镜头位置变体,居中演出优先选 _C。",
+  "- 跨角色名(高级用法):'前缀_角色/名字',如 A05_素世/exp_smile01 表示当前角色借用素世的表情。",
+  "  前缀必须完整(写 素世/exp_smile01 会找不到!)。前缀对照:00_=模型自己;",
+  "  A01_爱音 A02_灯 A03_乐奈 A04_立希 A05_素世 A06_睦 A07_祥子 A08_海玲 A09_初华 A10_喵梦;",
+  "  B01_茉幌 B02_朋花 B03_萤 B04_枣 B05_凪;C01_阿拉蕾 C02_都子 C03_律 C04_野乃花 C05_由乃;",
+  "  D01_蕾叶 D02_臬咲 D03_宁月 D04_千樱梨 D05_心玖。",
+  "  跨角色动作可能因参数差异效果打折,借用时优先选 MyGO/Ave Mujica 团内(A01-A10)的动作。",
+  "- assetId 永远用角色自己的模型(借表情/动作只改名字,不换模型)。",
+  "- chara 模型的 motion/expression 会原样写入脚本(不会加 anon_ 之类前缀),所以名字必须精确。",
+  "- 绝对不要编造名字。原生名从角色资产指南的 motions/expressions 列表选;",
+  "  完整跨角色清单见 figure/chara/表情动作总表.md(若可读取)。",
+  "",
   "=== 角色服装（换装）===",
   "每个角色在角色资产指南中有多套 Live2D 模型（preferredLive2D 数组），",
   "每套对应不同服装，以 'costume' 字段标注（如「默认常服」「冬制服」「2023 休闲服」）。",
@@ -203,6 +277,7 @@ const DEFAULT_DISCUSS_PROMPT = [
   "- 用户会给出目标总时长，请据此合理安排场景和对话的节奏",
   "- 角色有多套服装模型（常服/制服/休闲服等），不同场景可换不同服装",
   "- 角色通过 motion 来表达情绪变化（idle01/smile01/cry01/serious01/angry01/nf01 等），切勿整场只用 idle01",
+  "- 素材库中 pack 为 chara 的新版模型（Cubism 3/4）是主力资产，动作名形如 mtn_smile01_C、表情名形如 exp_smile01；还支持跨角色借用（A05_素世/exp_smile01 这种 前缀_角色/名 写法），优先使用它们",
   "- 同一场景中角色可以在同一站位切换表情，但不能换位置",
   "",
   "内容边界：",
@@ -1255,7 +1330,7 @@ function storySchema() {
         backgroundAssetId: "asset id from manifest, optional",
         bgmAssetId: "asset id from manifest, optional",
         actions: [
-          { type: "figure", character: "string", assetId: "asset id from manifest, may be figure or live2d", position: "left|center|right", motion: "Live2D motion name (REQUIRED)", expression: "Live2D expression name (REQUIRED)" },
+          { type: "figure", character: "string", assetId: "asset id from manifest, may be figure or live2d", position: "left|center|right", motion: "Live2D motion name (REQUIRED; chara pack: native like mtn_smile01_C, or cross-character like A05_素世/mtn_smile01_C)", expression: "Live2D expression name (REQUIRED; chara pack: native like exp_smile01, or cross-character like A05_素世/exp_smile01)" },
           { type: "line", speaker: "string", text: "string", durationSec: "number" },
           { type: "narration", text: "string", durationSec: "number" },
           { type: "wait", durationSec: "number" }
@@ -1406,6 +1481,8 @@ function scorePlayableLive2D(asset) {
   const text = `${asset.id} ${asset.name} ${rel}`;
   let score = 0;
   if (OFFICIAL_LIVE2D_ARCHIVE_PATTERN.test(text)) score += 100;
+  // chara 包是主力资产:存在时优先于旧包
+  if (asset.pack === "chara") score += 120;
   if (/(^|\/)live_default(\/|$)/i.test(rel)) score += 36;
   if (/(^|\/)casual-2023(\/|$)/i.test(rel)) score += 30;
   if (/(^|\/)(school_winter-2023|school_summer-2023)(\/|$)/i.test(rel)) score += 22;
@@ -1431,6 +1508,10 @@ function live2DSearchText(asset) {
 function canonicalCharacterKey(value) {
   const text = String(value || "").toLowerCase();
   if (!text) return "";
+  // chara 包配角目录(sub_*):目录名即 key,原样返回。
+  // 必须先于目录别名匹配,否则 sub_mikus_mother 之类会被 "miku"(心玖)抢中。
+  const subMatch = text.match(/(?:^|[\s/\\|-])(sub_[a-z0-9_]+)/);
+  if (subMatch) return subMatch[1];
   for (const character of CHARACTER_CATALOG) {
     if (text.includes(character.key)) return character.key;
     for (const alias of character.aliases) {
@@ -1459,11 +1540,16 @@ function costumeLabel(relativePath = "") {
   if (/furisode|振袖/i.test(lower)) return "振袖";
   if (/sumimi/i.test(lower)) return "sumimi 服";
   if (/event/i.test(lower)) return "活动服";
+  // chara 包服装目录命名
+  if (/casual_spring/i.test(lower)) return "春日便服";
+  if (/roomwear/i.test(lower)) return "居家服";
+  if (/(^|\/|_)live(_\d+|\/|$)/i.test(lower)) return "演出服";
+  if (/_still(\/|$)/i.test(lower)) return "静态立绘";
   // 回退：取路径中倒数第二段作为标识
   const parts = relativePath.replaceAll("\\", "/").split("/").filter(Boolean);
   for (let i = parts.length - 1; i >= 0; i--) {
     const part = parts[i].toLowerCase();
-    if (!CHARACTER_CATALOG.some((c) => c.key === part) && part !== "mygo" && part !== "figure" && part !== "mujica" && !part.endsWith(".json")) {
+    if (!CHARACTER_CATALOG.some((c) => c.key === part) && part !== "mygo" && part !== "figure" && part !== "mujica" && part !== "chara" && !part.endsWith(".json")) {
       return part.replace(/[_-]/g, " ");
     }
   }
@@ -1490,17 +1576,26 @@ function buildCharacterAssetGuide(manifest) {
           displayName: character.displayName,
           name: asset.name,
           relativePath: asset.relativePath,
+          pack: asset.pack || "",                          // 'chara' = 新版 Cubism 3/4 立绘包
           costume: costumeLabel(asset.relativePath),          // 中文服装标签
           costumeDir: path.dirname(asset.relativePath).split(path.sep).pop() || "",  // 原始目录名
           defaultMotion: asset.defaultMotion,
           defaultExpression: asset.defaultExpression,
           motions: filterShortNames(asset.motions || [], character.key).slice(0, 10),
-          expressions: filterShortNames(asset.expressions || [], character.key).slice(0, 10)
+          expressions: filterShortNames(asset.expressions || [], character.key).slice(0, 10),
+          ...(asset.pack === "chara" ? {
+            sharedMotions: asset.sharedMotions || 0,
+            sharedExpressions: asset.sharedExpressions || 0
+          } : {})
         }));
+      const hasChara = live2d.some((item) => item.pack === "chara");
       return {
         characterKey: character.key,
         displayName: character.displayName,
         aliases: character.aliases,
+        ...(hasChara ? {
+          charaSharedNote: "chara 包模型支持跨角色动作/表情:名字写成 前缀_角色/名(如 A05_素世/exp_smile01),前缀必须完整;00_<自己角色>/名 也可指自己;motions/expressions 列表里的是原生裸名;完整清单见 figure/chara/表情动作总表.md"
+        } : {}),
         preferredLive2D: live2d
       };
     })
@@ -1575,8 +1670,14 @@ function repairStoryCharacterAssets(story, manifest) {
       const replacement = selectBestLive2DForCharacter(manifest, characterKey);
       if (!replacement) continue;
       action.assetId = replacement.id;
-      action.motion = prefixMotionName(action.motion || replacement.defaultMotion || "", characterKey);
-      action.expression = prefixMotionName(action.expression || replacement.defaultExpression || "", characterKey);
+      if (replacement.pack === "chara") {
+        // chara 包动作/表情名原样使用(原生裸名或 前缀_角色/名),不加旧包的角色前缀
+        action.motion = action.motion || replacement.defaultMotion || "";
+        action.expression = action.expression || replacement.defaultExpression || "";
+      } else {
+        action.motion = prefixMotionName(action.motion || replacement.defaultMotion || "", characterKey);
+        action.expression = prefixMotionName(action.expression || replacement.defaultExpression || "", characterKey);
+      }
     }
   }
 }
@@ -1588,6 +1689,10 @@ async function buildAssetManifest(roots) {
     await walk(root, async (file) => {
       const stat = await fs.stat(file);
       if (!stat.isFile()) return;
+      // chara 包(figure/chara/)只索引 model3.json:动作/表情/贴图/moc3 等支持
+      // 文件全部通过模型的注册表引用(含 ../../共享表情动作 相对路径),索引它们
+      // 只会产生数千条噪音资产。
+      if (charaPackInfo(file) && !file.toLowerCase().endsWith(".model3.json")) return;
       let parsed = parseAsset(file, root);
       if (!parsed) parsed = await parsePossibleLive2DJson(file, root);
       if (parsed) assets.push(await enrichAsset(parsed));
@@ -1689,8 +1794,11 @@ async function enrichAsset(asset) {
   if (asset.kind !== "live2d") return asset;
   const modelDir = path.dirname(asset.path);
   const meta = await inspectLive2DModel(asset.path, modelDir);
-  const characterKey = inferLive2DCharacterKey(asset.relativePath);
-  return {
+  const chara = isCharaPackModel(asset.path) ? charaPackInfo(asset.path) : null;
+  const characterKey = chara
+    ? charaPackCharacterKey(chara.characterDir)
+    : inferLive2DCharacterKey(asset.relativePath);
+  const enriched = {
     ...asset,
     live2dVersion: asset.relativePath.toLowerCase().endsWith(".model3.json") ? "cubism3+" : "cubism2",
     modelRoot: meta.modelRoot || modelDir,
@@ -1703,13 +1811,54 @@ async function enrichAsset(asset) {
     defaultMotion: chooseMotion(meta.motions, characterKey),
     defaultExpression: chooseExpression(meta.expressions, characterKey)
   };
+  if (chara) {
+    enriched.pack = "chara";
+    enriched.charaCharacterDir = chara.characterDir;
+    enriched.charaCostumeDir = chara.costumeDir;
+  }
+  if (meta.sharedMotions) enriched.sharedMotions = meta.sharedMotions;
+  if (meta.sharedExpressions) enriched.sharedExpressions = meta.sharedExpressions;
+  if (meta.sharedPrefixBase) enriched.sharedPrefixBase = true;
+  return enriched;
 }
 
 async function inspectLive2DModel(modelPath, modelDir) {
   const motions = new Set();
   const expressions = new Set();
+  const isCubism3 = modelPath.toLowerCase().endsWith(".model3.json");
+  let sharedMotions = 0;
+  let sharedExpressions = 0;
+  let sharedPrefixBase = false;
   let modelRoot = modelDir;
   let paramImport = null;
+
+  // Cubism 3/4(chara 包):注册名带 "/" 或文件以 ".." 开头的条目指向跨角色
+  // 共享库(共享表情动作/),只统计数量,不进 motions/expressions —— 清单里
+  // 保留原生裸名(如 mtn_smile01_C / exp_smile01)。
+  // Cubism 2(旧 mygo 包)保持原行为:名字与文件名全部计入。
+  const isSharedRef = (name, file) =>
+    name.includes("/") || String(file || "").replaceAll("\\", "/").startsWith("..");
+  const addMotionName = (name, file) => {
+    const text = String(name || "");
+    if (!text) return;
+    if (isSharedRef(text, file)) {
+      sharedMotions += 1;
+      if (CHARA_SHARED_NAME_PATTERN.test(text)) sharedPrefixBase = true;
+      return;
+    }
+    motions.add(text);
+  };
+  const addExpressionName = (name, file) => {
+    const text = String(name || "");
+    if (!text) return;
+    if (isSharedRef(text, file)) {
+      sharedExpressions += 1;
+      if (CHARA_SHARED_NAME_PATTERN.test(text)) sharedPrefixBase = true;
+      return;
+    }
+    expressions.add(text);
+  };
+
   try {
     const text = await fs.readFile(modelPath, "utf8");
     const json = JSON.parse(text);
@@ -1720,24 +1869,41 @@ async function inspectLive2DModel(modelPath, modelDir) {
     const motionConfig = fileReferences.Motions || json.motions || {};
     if (Array.isArray(motionConfig)) {
       for (const motion of motionConfig) {
-        if (motion?.name) motions.add(String(motion.name));
-        if (motion?.file) motions.add(motionNameFromFile(motion.file));
+        if (isCubism3) {
+          if (motion?.name) addMotionName(motion.name, motion.file);
+          else if (motion?.file) addMotionName(motionNameFromFile(motion.file), motion.file);
+        } else {
+          if (motion?.name) motions.add(String(motion.name));
+          if (motion?.file) motions.add(motionNameFromFile(motion.file));
+        }
       }
     } else {
       for (const [group, entries] of Object.entries(motionConfig)) {
-        motions.add(String(group));
-        for (const entry of Array.isArray(entries) ? entries : []) {
-          if (entry?.File) motions.add(motionNameFromFile(entry.File));
-          if (entry?.file) motions.add(motionNameFromFile(entry.file));
+        const list = Array.isArray(entries) ? entries : [];
+        if (isCubism3) {
+          addMotionName(group, list[0]?.File || list[0]?.file || "");
+        } else {
+          motions.add(String(group));
+          for (const entry of list) {
+            if (entry?.File) motions.add(motionNameFromFile(entry.File));
+            if (entry?.file) motions.add(motionNameFromFile(entry.file));
+          }
         }
       }
     }
     const expressionConfig = fileReferences.Expressions || json.expressions || [];
     for (const expression of Array.isArray(expressionConfig) ? expressionConfig : []) {
-      if (expression?.Name) expressions.add(String(expression.Name));
-      if (expression?.name) expressions.add(String(expression.name));
-      if (expression?.File) expressions.add(motionNameFromFile(expression.File));
-      if (expression?.file) expressions.add(motionNameFromFile(expression.file));
+      if (isCubism3) {
+        if (expression?.Name) addExpressionName(expression.Name, expression.File);
+        else if (expression?.name) addExpressionName(expression.name, expression.file);
+        else if (expression?.File) addExpressionName(motionNameFromFile(expression.File), expression.File);
+        else if (expression?.file) addExpressionName(motionNameFromFile(expression.file), expression.file);
+      } else {
+        if (expression?.Name) expressions.add(String(expression.Name));
+        if (expression?.name) expressions.add(String(expression.name));
+        if (expression?.File) expressions.add(motionNameFromFile(expression.File));
+        if (expression?.file) expressions.add(motionNameFromFile(expression.file));
+      }
     }
   } catch {
     // Some community model json files are encoded oddly; fall back to sibling scan.
@@ -1746,13 +1912,16 @@ async function inspectLive2DModel(modelPath, modelDir) {
   await walk(modelDir, async (file) => {
     const lower = file.toLowerCase();
     if (LIVE2D_MOTION_EXTS.some((ext) => lower.endsWith(ext))) motions.add(motionNameFromFile(file));
-    if (lower.endsWith(".exp.json")) expressions.add(motionNameFromFile(file));
+    if (lower.endsWith(".exp.json") || lower.endsWith(".exp3.json")) expressions.add(motionNameFromFile(file));
   });
   return {
     modelRoot,
     paramImport,
     motions: [...motions].filter(Boolean),
-    expressions: [...expressions].filter(Boolean)
+    expressions: [...expressions].filter(Boolean),
+    sharedMotions,
+    sharedExpressions,
+    sharedPrefixBase
   };
 }
 
@@ -1767,18 +1936,19 @@ function resolveLive2DModelRoot(json, modelPath, modelDir) {
   let root = commonAncestor(referencedDirs);
   if (!root || root.length < path.parse(root).root.length) return modelDir;
 
-  // Don't let shared _mtn_exp references pull modelRoot above the model's own
-  // directory. The _mtn_exp directory is handled separately in copyLive2DForWebGAL.
-  // Keep modelRoot scoped to the costume directory (e.g. figure/mygo/tomori/live_default).
+  // Don't let shared motion/expression references (e.g. _mtn_exp for the old
+  // mygo pack, or ../../共享表情动作 for the chara pack) pull modelRoot above
+  // the model's own directory; shared libraries are copied separately.
+  // Scope any model under figure/<pack>/<character>/<costume> to its costume
+  // directory (or character level when there is no costume level).
   const rootParts = root.split(path.sep);
   const figIdx = rootParts.indexOf("figure");
   if (figIdx >= 0) {
     const figBase = rootParts.slice(0, figIdx + 1).join(path.sep);
     const relToFig = path.relative(figBase, modelDir);
     const parts = relToFig.split(path.sep).filter(Boolean);
-    if (parts[0] === "mygo" && parts.length >= 2) {
+    if (parts.length >= 2) {
       // parts[1] is <character>, parts[2] is <costume> (if present)
-      // Scope to costume level when possible, otherwise character level.
       const depth = parts.length >= 3 ? 3 : 2;
       root = path.join(figBase, ...parts.slice(0, depth));
     }
@@ -1818,12 +1988,14 @@ function commonAncestor(paths) {
 function motionNameFromFile(file) {
   return path.basename(String(file))
     .replace(/\.motion3\.json$/i, "")
+    .replace(/\.exp3\.json$/i, "")
     .replace(/\.exp\.json$/i, "")
     .replace(/\.mtn$/i, "");
 }
 
 function chooseMotion(motions = [], characterKey = "") {
-  const preferred = ["idle", "idle01", "nf01", "smile01", "serious01", "normal", "default"];
+  // preferred 需全小写:下面的 lowerMap 以 lower-case 名为键
+  const preferred = ["idle", "idle01", "mtn_idle01_c", "mtn_idle01", "nf01", "smile01", "mtn_smile01_c", "serious01", "normal", "default"];
   const lowerMap = new Map(motions.map((motion) => [String(motion).toLowerCase(), motion]));
   if (characterKey) {
     for (const name of preferred) {
@@ -1840,7 +2012,7 @@ function chooseMotion(motions = [], characterKey = "") {
 }
 
 function chooseExpression(expressions = [], characterKey = "") {
-  const preferred = ["default", "idle01", "smile01", "serious01", "normal"];
+  const preferred = ["default", "idle01", "exp_idle01", "smile01", "exp_smile01", "serious01", "exp_serious01", "normal"];
   const lowerMap = new Map(expressions.map((expression) => [String(expression).toLowerCase(), expression]));
   if (characterKey) {
     for (const name of preferred) {
@@ -1858,6 +2030,12 @@ function chooseExpression(expressions = [], characterKey = "") {
 
 function inferLive2DCharacterKey(rel = "") {
   const normalized = String(rel).replaceAll("\\", "/").toLowerCase();
+  // chara 包:角色目录是中文名(chara/<角色>/<服装>/…;索引根直接是 chara/ 时则是首段)。
+  const segments = normalized.split("/").filter(Boolean);
+  const charaIdx = segments.indexOf("chara");
+  const charaDir = charaIdx >= 0 && segments.length > charaIdx + 2 ? segments[charaIdx + 1] : "";
+  const key = charaPackCharacterKey(charaDir || segments[0] || "");
+  if (key) return key;
   const match = normalized.match(/(?:^|\/)(tomori|anon|soyo|taki|rana|sakiko|mutsumi|uika|umiri|nyamu)(?:\/|$)/);
   return match?.[1] || canonicalCharacterKey(rel);
 }
@@ -1947,9 +2125,14 @@ function summarizeManifest(manifest) {
       characterKey: inferAssetCharacterKey(asset),
       relativePath: asset.relativePath,
       version: asset.live2dVersion,
+      pack: asset.pack || "",
       isCompositePart: Boolean(asset.isCompositePart),
       motions: (asset.motions || []).slice(0, 16),
       expressions: (asset.expressions || []).slice(0, 16),
+      ...(asset.pack === "chara" ? {
+        sharedMotions: asset.sharedMotions || 0,
+        sharedExpressions: asset.sharedExpressions || 0
+      } : {}),
       tags: asset.tags
     }));
 
@@ -2166,14 +2349,16 @@ async function compileAction(action, assetMap, gameDir, copied) {
       return `changeFigure:none${pos ? " " + pos : ""} -next;`.replace(/  +/g, " ");
     }
     const asset = assetMap.get(action.assetId);
+    const isCharaPack = asset?.kind === "live2d" && isCharaLive2DAsset(asset);
     const name = asset?.kind === "live2d"
       ? await copyLive2DForWebGAL(asset, gameDir, copied)
       : await copyAssetForWebGAL(asset, gameDir, "figure", copied);
     if (!name) return null;
     const pos = positionFlag(action.position);
     const characterKey = canonicalCharacterKey(action.character || "");
-    const motion = prefixMotionName(action.motion || "", characterKey);
-    const expression = prefixMotionName(action.expression || "", characterKey);
+    // chara 包的注册名(原生裸名 / 前缀_角色/名)原样写入,不做旧包的 anon_ 式前缀转换
+    const motion = isCharaPack ? String(action.motion || "") : prefixMotionName(action.motion || "", characterKey);
+    const expression = isCharaPack ? String(action.expression || "") : prefixMotionName(action.expression || "", characterKey);
     // WebGAL key=value params: -id=, -motion=, -expression= (WITH dash prefix)
     const motionArg = motion ? ` -motion=${escapeCommandValue(motion)}` : "";
     const expressionArg = expression ? ` -expression=${escapeCommandValue(expression)}` : "";
@@ -2277,8 +2462,13 @@ async function copyAssetForWebGAL(asset, gameDir, subdir, copied) {
   return safeName;
 }
 
+function isCharaLive2DAsset(asset) {
+  return asset?.kind === "live2d" && (asset.pack === "chara" || isCharaPackModel(asset.path || ""));
+}
+
 async function copyLive2DForWebGAL(asset, gameDir, copied) {
   if (!asset || !asset.path || !fssync.existsSync(asset.path)) return null;
+  if (isCharaLive2DAsset(asset)) return copyCharaLive2DForWebGAL(asset, gameDir, copied);
   const modelRoot = asset.modelRoot || path.dirname(asset.path);
   const key = `live2d:${modelRoot}:${asset.path}`;
   if (copied.has(key)) return copied.get(key);
@@ -2320,6 +2510,62 @@ async function copyLive2DForWebGAL(asset, gameDir, copied) {
   });
   await writeLive2DManifest(gameDir, copied);
   return webgalPath;
+}
+
+// chara 包(figure/chara/,Cubism 3/4)不走上面的 hashed-dir 方案:
+// 按原结构复制 figure/chara/<角色>/<服装>/ → game/figure/chara/<角色>/<服装>/,
+// 模型内注册的 ../../共享表情动作/… 相对路径因此保持不变。
+// changeFigure 的名字形如 chara/<角色>/<服装>/<file>.model3.json。
+async function copyCharaLive2DForWebGAL(asset, gameDir, copied) {
+  const info = charaPackInfo(asset.path);
+  if (!info || !info.characterDir || !info.costumeDir) return null;
+  const key = `live2d:chara:${asset.path}`;
+  if (copied.has(key)) return copied.get(key);
+
+  const modelRoot = asset.modelRoot || path.dirname(asset.path);
+  const relToCharaRoot = path.relative(info.charaRoot, modelRoot).split(path.sep).join("/");
+  const targetDir = path.join(gameDir, "figure", "chara", ...relToCharaRoot.split("/"));
+  if (!copied.has(`live2d:chara-dir:${targetDir}`)) {
+    await fs.rm(targetDir, { recursive: true, force: true });
+    await copyDir(modelRoot, targetDir);
+    copied.set(`live2d:chara-dir:${targetDir}`, true);
+  }
+
+  await copyCharaSharedLibrary(info.charaRoot, gameDir, copied);
+
+  const modelRelativePath = path.relative(modelRoot, asset.path).split(path.sep).join("/");
+  const webgalPath = `chara/${relToCharaRoot}/${modelRelativePath}`;
+  copied.set(key, webgalPath);
+  copied.set(`live2d-meta:${asset.id}`, {
+    id: asset.id,
+    name: asset.name,
+    version: asset.live2dVersion,
+    pack: "chara",
+    model: webgalPath,
+    motions: asset.motions || [],
+    expressions: asset.expressions || [],
+    defaultMotion: asset.defaultMotion || "",
+    defaultExpression: asset.defaultExpression || ""
+  });
+  await writeLive2DManifest(gameDir, copied);
+  return webgalPath;
+}
+
+// 跨角色共享库(figure/chara/共享表情动作/,约 74MB)每个工程复制一次;
+// 已存在带标记文件的副本时跳过。
+async function copyCharaSharedLibrary(charaRoot, gameDir, copied) {
+  if (copied.has("live2d:chara-shared")) return;
+  copied.set("live2d:chara-shared", true);
+  const sharedSource = path.join(charaRoot, CHARA_SHARED_DIR);
+  if (!fssync.existsSync(sharedSource)) return;
+  const sharedTarget = path.join(gameDir, "figure", "chara", CHARA_SHARED_DIR);
+  const marker = path.join(sharedTarget, ".galcode-shared-lib.json");
+  if (fssync.existsSync(marker)) return;
+  await copyDir(sharedSource, sharedTarget);
+  await writeJson(marker, {
+    source: sharedSource,
+    copiedAt: new Date().toISOString()
+  });
 }
 
 async function writeLive2DEntryPoint(asset, targetDir, targetDirName, modelRelativePath) {

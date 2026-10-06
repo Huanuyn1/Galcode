@@ -62,7 +62,10 @@ afterAll(() => {
 
 describe("offline compile snapshot", () => {
   it("cli yolo --offline produces the expected WebGAL script and story JSON", async () => {
-    await runCli(["cli", "yolo", "--offline", "--duration", "5", "--out", OUT_DIR, "--assets", FIXTURE_ASSETS, "--no-theme"]);
+    // --figure-dir pins the "default figure dir" to a nonexistent path so the
+    // test stays hermetic even when the real figure/ contains the (gitignored)
+    // chara pack or old mygo pack on a developer machine.
+    await runCli(["cli", "yolo", "--offline", "--duration", "5", "--out", OUT_DIR, "--assets", FIXTURE_ASSETS, "--figure-dir", path.join(OUT_DIR, "no-such-figure"), "--no-theme"]);
 
     const scriptPath = path.join(OUT_DIR, "game", "scene", "start.txt");
     const storyPath = path.join(OUT_DIR, "story.json");
