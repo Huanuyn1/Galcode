@@ -10,7 +10,7 @@ if exist "%ROOT_DIR%\tools\bin\node.exe" (
 ) else (
   where node >nul 2>nul
   if errorlevel 1 (
-    echo Galcode needs Node.js 20 or newer.
+    echo Galcode needs Node.js 22.19+ or 24+.
     echo Install Node.js LTS from https://nodejs.org and reopen PowerShell.
     exit /b 127
   )
