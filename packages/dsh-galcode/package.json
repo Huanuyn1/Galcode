@@ -1,6 +1,6 @@
 {
   "name": "dsh-galcode",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "dsh bundle for Galcode: MCP bridge to galcode-mcp, the galcode agent preset, and WebGAL writing skills.",
   "type": "module",
   "private": true,
