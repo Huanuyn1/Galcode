@@ -37,13 +37,13 @@ exports[`offline compile snapshot > cli yolo --offline produces the expected Web
     {
       "id": "opening",
       "title": "排练室外",
-      "backgroundAssetId": "assets-背景-排练室走廊-jpg-76b28d5512",
-      "bgmAssetId": "assets-bgm-s-title-mp3-7795c559c2",
+      "backgroundAssetId": "assets-背景-排练室走廊-jpg-<HASH>",
+      "bgmAssetId": "assets-bgm-s-title-mp3-<HASH>",
       "actions": [
         {
           "type": "figure",
           "character": "高松灯",
-          "assetId": "assets-tachie-anon-png-8a63ec0180",
+          "assetId": "assets-tachie-anon-png-<HASH>",
           "position": "left",
           "motion": "idle01",
           "expression": "default"
@@ -51,7 +51,7 @@ exports[`offline compile snapshot > cli yolo --offline produces the expected Web
         {
           "type": "figure",
           "character": "千早爱音",
-          "assetId": "assets-tachie-tomori-png-0d767224e5",
+          "assetId": "assets-tachie-tomori-png-<HASH>",
           "position": "right",
           "motion": "idle01",
           "expression": "default"
@@ -80,7 +80,7 @@ exports[`offline compile snapshot > cli yolo --offline produces the expected Web
         {
           "type": "figure",
           "character": "高松灯",
-          "assetId": "assets-tachie-anon-png-8a63ec0180",
+          "assetId": "assets-tachie-anon-png-<HASH>",
           "position": "left",
           "motion": "cry01",
           "expression": "cry01"
@@ -94,7 +94,7 @@ exports[`offline compile snapshot > cli yolo --offline produces the expected Web
         {
           "type": "figure",
           "character": "千早爱音",
-          "assetId": "assets-tachie-tomori-png-0d767224e5",
+          "assetId": "assets-tachie-tomori-png-<HASH>",
           "position": "right",
           "motion": "smile01",
           "expression": "smile01"
@@ -126,13 +126,12 @@ exports[`offline compile snapshot > cli yolo --offline produces the expected Web
   "bgm": [
     {
       "assetName": "s_Title.mp3",
-      "assetPath": "/home/huanuyn/Galcode/test/fixtures/assets/bgm/s_Title.mp3",
+      "assetPath": "<ASSETS>/bgm/s_Title.mp3",
       "startSec": 0,
       "endSec": 5,
       "volume": 0.25,
       "fadeIn": 2,
-      "fadeOut": 3,
-      "_copiedPath": "<OUT>/game/bgm/s_Title.mp3"
+      "fadeOut": 3
     }
   ],
   "meta": {
@@ -144,7 +143,7 @@ exports[`offline compile snapshot > cli yolo --offline produces the expected Web
     {
       "type": "figure",
       "character": "高松灯",
-      "assetId": "assets-tachie-anon-png-8a63ec0180",
+      "assetId": "assets-tachie-anon-png-<HASH>",
       "position": "left",
       "motion": "idle01",
       "expression": "default",
@@ -154,7 +153,7 @@ exports[`offline compile snapshot > cli yolo --offline produces the expected Web
     {
       "type": "figure",
       "character": "千早爱音",
-      "assetId": "assets-tachie-tomori-png-0d767224e5",
+      "assetId": "assets-tachie-tomori-png-<HASH>",
       "position": "right",
       "motion": "idle01",
       "expression": "default",
@@ -193,7 +192,7 @@ exports[`offline compile snapshot > cli yolo --offline produces the expected Web
     {
       "type": "figure",
       "character": "高松灯",
-      "assetId": "assets-tachie-anon-png-8a63ec0180",
+      "assetId": "assets-tachie-anon-png-<HASH>",
       "position": "left",
       "motion": "cry01",
       "expression": "cry01",
@@ -211,7 +210,7 @@ exports[`offline compile snapshot > cli yolo --offline produces the expected Web
     {
       "type": "figure",
       "character": "千早爱音",
-      "assetId": "assets-tachie-tomori-png-0d767224e5",
+      "assetId": "assets-tachie-tomori-png-<HASH>",
       "position": "right",
       "motion": "smile01",
       "expression": "smile01",
