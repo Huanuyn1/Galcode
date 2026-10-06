@@ -1,0 +1,58 @@
+# The dsh-galcode bundle patch: Galcode's host-plane wiring over the dsh-base
+# layer (and over the community dsh-tui layer, when that bundle is installed).
+# Applied after the bundles listed before `dsh-galcode` in the profile's
+# `dsh.profile.bundles`; the profile's own cordis.patch.yml and any --patch
+# overlays still come later.
+#
+# A patch replaces the targeted row's whole `config`, so overrides below
+# restate every key they own.
+
+# ── deployment defaults Galcode cares about ─────────────────────────────────
+
+# Fresh agents in this profile start on the official DeepSeek chat model.
+# (Restates the dsh-base row's shape: provider + model.)
+- id: agent-default-model
+  config:
+    provider: deepseek-official
+    model: deepseek-chat
+
+# Make the Galcode preset the roster default. This row belongs to the
+# community @deepseek-harness-tui/dsh-tui bundle and only exists when that
+# bundle is installed; in compositions without it this patch targets a
+# missing id and the loader logs a harmless `entry not found` notice.
+# The preset itself stays selectable via `/preset galcode` either way.
+- id: dsh-tui-agent-preset-registry
+  config:
+    default: galcode
+
+# ── the Galcode MCP bridge ──────────────────────────────────────────────────
+#
+# One galcode-mcp stdio server for the whole process; its tools register
+# globally as mcp__galcode__<tool> and resolve into every agent/preset scope
+# (agent → preset → global). The server anchors every project path at its own
+# installation directory, so it works from any dsh cwd.
+#
+# Command resolution, in priority order:
+#   1. $GALCODE_MCP_SERVER — absolute path of bin/galcode-mcp.js, set by the
+#      `galcode` launcher before it spawns dsh. We then run it with the
+#      current Node executable: always directly spawnable, including on
+#      Windows where a `.cmd` bin shim cannot be spawned without a shell.
+#   2. `galcode-mcp` — the bin the published `galcode` npm package puts on
+#      PATH (works on POSIX launchers; on Windows always launch via
+#      `galcode`, which sets case 1).
+# For local development without the launcher, export GALCODE_MCP_SERVER with
+# an absolute path, e.g.:
+#   GALCODE_MCP_SERVER=/path/to/Galcode/bin/galcode-mcp.js dsh --profile galcode
+- insert:
+    - id: mcp-galcode
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: galcode
+        transport: stdio
+        command: !!js "process.env.GALCODE_MCP_SERVER ? process.execPath : 'galcode-mcp'"
+        args: !!js "process.env.GALCODE_MCP_SERVER ? [process.env.GALCODE_MCP_SERVER] : []"
+        # galcode_preview_start can wait ~2 minutes for the WebGAL dev server
+        # (URL report + stability probes); the 60s default would cut it off.
+        toolCallTimeoutMs: 300000
+        # A missing galcode-mcp must never block the harness from booting.
+        failOnStartupError: false

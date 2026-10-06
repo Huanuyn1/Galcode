@@ -1,0 +1,81 @@
+{
+  "name": "dsh-galcode",
+  "version": "0.1.0",
+  "description": "dsh bundle for Galcode: MCP bridge to galcode-mcp, the galcode agent preset, and WebGAL writing skills.",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "engines": {
+    "node": "^22.19 || >=24"
+  },
+  "files": [
+    "cordis.patch.yml",
+    "presets/",
+    "skills/",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": [
+        "./cordis.patch.yml",
+        "./presets/galcode.patch.yml"
+      ]
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh": "^0.2.0-rc.2",
+    "@deepseek-ai/dsh-agent-preset": "^0.2.0-rc.2",
+    "@deepseek-ai/dsh-agent-preset-registry": "^0.2.0-rc.2",
+    "@deepseek-ai/dsh-agent-default-model": "^0.2.0-rc.2",
+    "@deepseek-ai/dsh-mcp-client": "^0.2.0-rc.2",
+    "@deepseek-ai/dsh-persona": "^0.2.0-rc.2",
+    "@deepseek-ai/dsh-skill-filesystem": "^0.2.0-rc.2",
+    "@deepseek-ai/dsh-tool-ask-user": "^0.2.0-rc.2",
+    "@deepseek-ai/dsh-tool-bash": "^0.2.0-rc.2",
+    "@deepseek-ai/dsh-tool-fs": "^0.2.0-rc.2",
+    "@deepseek-ai/dsh-tool-pwsh": "^0.2.0-rc.2",
+    "@deepseek-ai/dsh-tool-skill": "^0.2.0-rc.2",
+    "@deepseek-ai/dsh-tool-todo": "^0.2.0-rc.2"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-agent-preset": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-agent-preset-registry": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-agent-default-model": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-mcp-client": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-persona": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-skill-filesystem": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-tool-ask-user": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-tool-bash": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-tool-fs": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-tool-pwsh": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-tool-skill": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-tool-todo": {
+      "optional": true
+    }
+  }
+}
