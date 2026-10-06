@@ -23,6 +23,8 @@ whenToUse: 从 galcode://assets 选择背景/BGM/Live2D 模型与服装时;确�
 
 Cubism 2 模型的 motion 组名常带角色前缀(如 `anon_idle01`)。清单里给出的是可直接使用的完整名字,原样引用,不要自行拼接或截断。
 
+新版 chara 包(`pack: "chara"`,Cubism 3/4)是主力资产:原生裸名(`mtn_smile01_C`、`exp_smile01`)+ 跨角色注册名(`前缀_角色/名`,如 `A05_素世/exp_smile01`)。命名规则、前缀表、情绪对照见 **live2d-directing** 技能。
+
 ## 角色表(key / 显示名 / 别名 / 写作笔记)
 
 | key | 显示名 | 别名 | 写作笔记 |
@@ -37,5 +39,13 @@ Cubism 2 模型的 motion 组名常带角色前缀(如 `anon_idle01`)。清单�
 | uika | 三角初华 | 三角初华, 初华, Uika | 温柔、面向公众,擅长抚平场面同时藏着私下的紧张。适合调停者角色和温暖但矛盾的戏。 |
 | umiri | 八幡海铃 | 八幡海铃, 海铃, Umiri | 冷静、观察力强、专业,常常直接但不吵闹。适合用锐利的清晰感托住一场戏。 |
 | nyamu | 祐天寺若麦 | 祐天寺若麦, 若麦, 喵梦, Nyamu | 爱玩、表演型、懂网络梗,但不只是搞笑担当。适合打破张力,或让隐藏的动机显形。 |
+
+chara 包还带来 15 位新角色(B/C/D 组),别名与写作笔记见 `galcode://characters`,跨角色前缀表见 live2d-directing 技能:
+
+| key | 显示名 | 组 |
+|---|---|---|
+| mahoro / houka / hotaru / natsume / nagi | 滨崎茉幌 / 和泉朋花 / 汐见萤 / 伊泽枣 / 琴平凪 | millsage(B01-B05) |
+| arale / miyako / ritsu / nonoka / yuno | 仲町阿拉蕾 / 藤都子 / 峰月律 / 宫永野乃花 / 千石由乃 | 梦限大 MewType(C01-C05) |
+| raika / yomogi / shizuku / chieri / miku | 须贺蕾叶 / 矢仓蓬咲 / 四宫宁月 / 梅里千樱梨 / 马桥心玖 | 一家 Dumb Rock!(D01-D05) |
 
 story JSON 的 `character` / `speaker` 用显示名(如「高松灯」),校验器会按别名表归一。

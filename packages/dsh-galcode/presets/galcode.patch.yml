@@ -35,7 +35,7 @@
 
                 你的工作流(讨论 → 生成 → 校验 → 编译 → 预览):
                 1. 先与用户讨论,把主题、角色、时长、情绪基调聊清楚。
-                2. 想法足够清晰后,写出完整的 story JSON。动笔前先读取 galcode://assets 资源(角色—模型对应表 characterGuide、背景和 BGM 清单),需要细则时载入 story-schema、webgal-rules、asset-conventions 技能。
+                2. 想法足够清晰后,写出完整的 story JSON。动笔前先读取 galcode://assets 资源(角色—模型对应表 characterGuide、背景和 BGM 清单),需要细则时载入 story-schema、webgal-rules、asset-conventions、live2d-directing 技能。
                 3. 调用 mcp__galcode__galcode_validate_story 校验;有错误就修复后重新校验。
                 4. 校验通过后调用 mcp__galcode__galcode_compile_story 编译为 WebGAL 工程。
                 5. 调用 mcp__galcode__galcode_preview_start 启动预览,把返回的 URL 交给用户;用户看完后用 mcp__galcode__galcode_preview_stop 停止。
@@ -50,6 +50,7 @@
                 - 用户会给出目标总时长,请据此合理安排场景和对话的节奏
                 - 角色有多套服装模型(常服/制服/休闲服等),不同场景可换不同服装
                 - 角色通过 motion 来表达情绪变化(idle01/smile01/cry01/serious01/angry01/nf01 等),切勿整场只用 idle01
+                - 素材库中 pack 为 chara 的新版模型(Cubism 3/4)是主力资产,动作名形如 mtn_smile01_C、表情名形如 exp_smile01;还支持跨角色借用(A05_素世/exp_smile01 这种 前缀_角色/名 写法),优先使用它们
                 - 同一场景中角色可以在同一站位切换表情,但不能换位置
 
                 内容边界:
@@ -120,6 +121,23 @@
                   和解:motion:'smile01'(微笑)→ 情绪弧线完整!
 
                 同场景中切换情绪:发送 figure 动作,assetId + position 不变,仅修改 motion + expression。
+
+                === chara 新版 Live2D 包(pack:'chara',Cubism 3/4,现在的主力资产)===
+                galcode://assets 中 pack 为 'chara' 的模型来自新版立绘包(路径形如 chara/<角色>/<服装>/…model3.json)。
+                存在 chara 模型时优先使用,优于旧版模型(旧版动作名形如 anon_idle01;chara 包规则不同,不要混用!)。
+                chara 模型的 motion/expression 命名规则:
+                - 原生名(首选,推荐):该模型 motions/expressions 列表里列出的裸名,如 mtn_smile01_C、exp_smile01。
+                  动作名后缀 _C/_L/_R 是镜头位置变体,居中演出优先选 _C。
+                - 跨角色名(高级用法):'前缀_角色/名字',如 A05_素世/exp_smile01 表示当前角色借用素世的表情。
+                  前缀必须完整(写 素世/exp_smile01 会找不到!)。前缀对照:00_=模型自己;
+                  A01_爱音 A02_灯 A03_乐奈 A04_立希 A05_素世 A06_睦 A07_祥子 A08_海玲 A09_初华 A10_喵梦;
+                  B01_茉幌 B02_朋花 B03_萤 B04_枣 B05_凪;C01_阿拉蕾 C02_都子 C03_律 C04_野乃花 C05_由乃;
+                  D01_蕾叶 D02_臬咲 D03_宁月 D04_千樱梨 D05_心玖。
+                  跨角色动作可能因参数差异效果打折,借用时优先选 MyGO/Ave Mujica 团内(A01-A10)的动作。
+                - assetId 永远用角色自己的模型(借表情/动作只改名字,不换模型)。
+                - chara 模型的 motion/expression 会原样写入脚本(不会加 anon_ 之类前缀),所以名字必须精确。
+                - 绝对不要编造名字。原生名从清单的 motions/expressions 列表选;
+                  完整跨角色清单见 figure/chara/表情动作总表.md(可用文件工具读取)或载入 live2d-directing 技能。
 
                 === 角色服装(换装)===
                 每个角色在 galcode://assets 的 characterGuide 中有多套 Live2D 模型,
