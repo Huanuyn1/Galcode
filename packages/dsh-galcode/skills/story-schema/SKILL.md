@@ -66,7 +66,7 @@ Galcode 把结构化的 story JSON 编译成 WebGAL 工程。顶层字段:
 - 每个 figure 动作必须同时带 motion 和 expression(从该模型的 motions/expressions 列表里选)。
 - 移除角色:`{ "type": "figure", "character": "none", "position": "left" }`。
 - 角色在同一站位切换情绪:assetId 和 position 不变,只改 motion/expression。
-- BGM 数组(顶层 `bgm`)是可选的后期混音时间线:startSec/endSec 从故事开头算起,volume 建议 0.2-0.3,多条可重叠;不提供则不加音乐。
+- BGM 数组(顶层 `bgm`)可选:编译时对应音频文件会被复制到 game/bgm/ 供引擎播放,startSec/endSec/volume/fadeIn/fadeOut 仅作为时间线信息随 story.json 保存;不存在后期混音步骤。不提供 bgm 数组则只使用场景级 bgmAssetId 配乐。
 - 场景数量 3-5 个,每个场景 4-8 句台词/旁白。
 
 ## 最小完整示例
