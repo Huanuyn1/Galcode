@@ -197,10 +197,10 @@ const PROMPT_DEFS = [
     ]
   },
   {
-    name: "galcode_render_debug",
-    description: "Help diagnose a failed compile or preview job using Galcode logs.",
+    name: "galcode_preview_debug",
+    description: "Help diagnose a failed compile or preview server using Galcode logs.",
     arguments: [
-      { name: "log", description: "Job or preview server log excerpt.", required: true }
+      { name: "log", description: "Compile output or preview server log excerpt.", required: true }
     ]
   }
 ];
@@ -350,7 +350,7 @@ function toolDefinitions() {
     },
     {
       name: "galcode_compile_story",
-      description: "Compile a validated story JSON into a WebGAL project directory. This does not record video.",
+      description: "Compile a validated story JSON into a WebGAL project directory. This does not start a preview server.",
       inputSchema: {
         type: "object",
         properties: {
@@ -398,13 +398,13 @@ function toolDefinitions() {
     },
     {
       name: "galcode_read_output",
-      description: "Read story.json, WebGAL start.txt, README, or a small log from an output directory.",
+      description: "Read story.json, WebGAL start.txt, or README from an output directory.",
       inputSchema: {
         type: "object",
         required: ["outputDir", "file"],
         properties: {
           outputDir: { type: "string", description: "Output directory under project root." },
-          file: { type: "string", enum: ["story", "script", "readme", "log"], description: "Which generated text to read." },
+          file: { type: "string", enum: ["story", "script", "readme"], description: "Which generated text to read." },
           maxBytes: { type: "number", description: "Maximum bytes to read. Defaults to 12000." }
         }
       }
@@ -490,7 +490,7 @@ function getPrompt(name, args) {
   if (name === "galcode_fix_validation_errors") {
     return promptText("Fix the Galcode story JSON according to these validation errors. Prefer changing invalid asset ids/actions over changing the user's story intent. Return only JSON.", args.errors || "");
   }
-  if (name === "galcode_render_debug") {
+  if (name === "galcode_preview_debug") {
     return promptText("Diagnose this Galcode compile or preview log. Explain the likely cause and the next concrete command/tool call to try.", args.log || "");
   }
   throw new Error(`Unknown prompt: ${name}`);
@@ -688,8 +688,7 @@ async function listOutputsTool(args) {
       dir,
       updatedAt: stat?.mtime?.toISOString?.() || "",
       story: fssync.existsSync(path.join(dir, "story.json")),
-      script: fssync.existsSync(path.join(dir, "game", "scene", "start.txt")),
-      video: fssync.existsSync(path.join(dir, "final.mp4")) ? path.join(dir, "final.mp4") : ""
+      script: fssync.existsSync(path.join(dir, "game", "scene", "start.txt"))
     });
   }
   dirs.sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
@@ -703,8 +702,7 @@ async function readOutputTool(args) {
   const candidates = {
     story: path.join(outputDir, "story.json"),
     script: path.join(outputDir, "game", "scene", "start.txt"),
-    readme: path.join(outputDir, "README.md"),
-    log: path.join(outputDir, "record.log")
+    readme: path.join(outputDir, "README.md")
   };
   const target = candidates[file];
   if (!target) throw new Error(`Unsupported output file selector: ${file}`);
