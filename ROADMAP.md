@@ -1,85 +1,38 @@
 # Galcode 更新计划
 
-## v0.1.2-mcp计划
+## v0.2 — TUI 化（已完成）
 
-把该项目的基本功能（内录、提示词工程）包装成mcp，使其能被使用于主流agent工具。
+GUI 弃用，项目转为以 dsh（DeepSeek Harness）为主体的终端应用：
 
-## v0.2 — 内置 TTS（文字转语音）
+- 移除 Electron GUI、原生双击 launcher 和视频录制技术栈（存档于 `legacy/v0.1-gui` 分支）
+- 裸 `galcode` 启动 dsh TUI 创作台：`galcode` agent 预设（人格移植自旧版 writer/discuss/brainstorm 提示词）+ 四个技能 + MCP 工具
+- 工作流改为：对话讨论 → 生成 story JSON → 校验 → 编译 → `preview` 本地预览，在浏览器里看片
+- 浏览器预览取代本地录制出片；模型配置完全交给 dsh（云端 API，无本地模型、无 GPU 要求）
+- 同步完成：MCP 服务器（v0.1.2 计划）、pnpm workspace、vitest 测试套件、三平台 CI 矩阵
 
-让角色能够开口说话，而非仅显示文字。
+## v0.3 — 确定性渲染管线
 
-### 方案
+让"录屏"以工程化的方式回归，不再依赖脆弱的实时录制：
 
-- 集成轻量级 TTS 引擎（优先考虑本地运行，可选 Edge TTS / VITS / Bert-VITS2）
-- 为每个角色绑定语音模型，支持 MyGO / Ave Mujica 角色声线
-- 编译阶段为每句 `line` 生成对应 `.wav` 音频文件
-- WebGAL 脚本中加入 `vocal` 指令播放语音
-- 录制视频时音频与 BGM 混音
-- CLI 参数：`--tts <engine>` `--tts-voice-dir <path>`
+- 基于 Chromium beginFrame 的确定性逐帧渲染（帧时钟由渲染器驱动，不再靠墙钟截图）
+- 录制回归：从 WebGAL 预览页面直接产出成片视频
+- canvas MV：为歌曲类二创提供程序化 MV 画面生成
 
-### 技术选型（候选）
+## v0.4 — 音频域
 
-| 引擎 | 优点 | 缺点 |
-|------|------|------|
-| Edge TTS | 免费，中文自然 | 需联网 |
-| VITS | 本地，可训练角色模型 | 需预训练模型 |
-| Bert-VITS2 | 情感控制好 | 部署复杂 |
-| Piper | 轻量，跨平台 | 中文一般 |
+纯 Node 技术栈（onnxruntime-node），不引入 Python 侧车：
 
-初期推荐 Edge TTS（零成本快速验证），后续训练角色专属 VITS 模型。
+- 音频分离（人声/伴奏/鼓组等分轨）
+- RVC 变声（角色声线转换）
+- 人力 UTAU（拼接式歌声合成）
+- 原 v0.2 的 TTS 设想并入本阶段一并评估
 
----
+## v0.5 — fork TUI 定制面板
 
-## v0.3 — AI 画图（封面 / 插画 / 背景）
+fork 社区 `dsh-tui`，做 Galcode 专属的面板定制：
 
-根据剧情自动生成视觉素材，让 AI 不只能写还能"画"。
-
-### 方案
-
-- 接入生图 API（OpenAI DALL-E / Stable Diffusion / ComfyUI）
-- 故事生成阶段，AI 在 `story.json` 中声明需要的 `illustrations`：
-  - `cover`: 封面图（比例 16:9）
-  - `illustrations`: 场景插画（按 scene 插入）
-  - `backgrounds`: AI 生成的背景替代素材库背景
-- CLI 参数：`--image-api <provider>` `--image-model <model>` `--image-style <style>`
-- 生成后的图片自动编入素材索引，录制时作为 `changeBg` 使用
-- 离线模式：使用内置模板或跳过
-
-### 生图时机
-
-```
-story.json 生成完成
-    │
-    ├── 解析 illustrations 声明
-    ├── 调用生图 API（并发批量）
-    ├── 下载图片 → figure/generated/
-    └── 重新编译（新背景替换旧背景）
-            │
-            └── 录制视频
-```
-
----
-
-## v0.4 — AI 生成 BGM
-
-让 AI 根据剧情情绪选择或生成背景音乐。
-
-### 方案
-
-- 轻量方案：AI 从素材库中选择已有 BGM 并编排时间表（当前已支持）
-- 进阶方案：接入音乐生成 API（Suno / Udio / MusicGen）
-- `story.json` 的 `bgm` 数组支持 `generated: true`，编译时调用生乐 API
-- 生成参数由 AI 根据场景情绪自动填写：`mood`, `tempo`, `instrument`
-- CLI 参数：`--music-api <provider>` `--music-model <model>`
-
-### 情绪映射
-
-```
-紧张/冲突 → 低音弦乐 + 快节奏
-悲伤/沉默 → 钢琴独奏 + 慢板
-和解/温暖 → 吉他 + 中速
-日常/轻松 → 轻快流行
-```
+- 作品列表 / 预览状态 / 素材清单等专用面板
+- 针对二创工作流的交互优化
 
 ---
 
@@ -88,8 +41,9 @@ story.json 生成完成
 - **多语言支持**：中 / 日 / 英 WebGAL 模板 + AI 翻译
 - **交互式选项**：WebGAL 分支选项，AI 生成多结局
 - **批量投稿**：一次生成多个短篇，适合系列内容
-- **Web UI**：浏览器界面替代纯 CLI
-- **角色 LORA 注入**：生图时保持角色外观一致
+- **AI 生图**：封面 / 场景插画 / AI 背景，自动编入素材索引
+- **AI BGM**：按剧情情绪选择或生成背景音乐（当前已支持从素材库编排）
+- **角色 LoRA 注入**：生图时保持角色外观一致
 
 ---
 
@@ -98,3 +52,5 @@ story.json 生成完成
 | 版本 | 日期 | 内容 |
 |------|------|------|
 | v0.1.0 | 2026-06 | 基础 CLI、AI 剧本生成、Live2D 渲染、Electron 录制、BGM 混音 |
+| v0.1.2 | 2026-10 | MCP 服务器：角色/素材/schema 资源 + 校验、编译、预览工具，接入主流 agent 工具 |
+| v0.2 | 2026-10 | TUI 化：GUI 弃用，dsh 主体 TUI 创作台，preview 取代录制，测试与 CI 补齐 |
