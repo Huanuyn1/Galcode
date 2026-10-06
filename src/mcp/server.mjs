@@ -295,9 +295,11 @@ class StdioJsonRpcTransport {
   }
 
   send(message) {
-    const json = JSON.stringify(message);
-    const bytes = Buffer.byteLength(json, "utf8");
-    process.stdout.write(`Content-Length: ${bytes}\r\n\r\n${json}`);
+    // MCP stdio framing is newline-delimited JSON. The official SDK client
+    // only yields complete `\n`-terminated lines, so a Content-Length-framed
+    // reply without a trailing newline is never delivered and the client
+    // hangs in negotiation.
+    process.stdout.write(`${JSON.stringify(message)}\n`);
   }
 }
 
