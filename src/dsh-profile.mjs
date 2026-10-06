@@ -194,10 +194,11 @@ export async function setupDshProfile(options = {}) {
   }
 
   log("installing profile dependencies with pnpm...");
-  await run(process.execPath, [resolvePnpmCliJs(), "install"], {
+  const install = options.install ?? (() => run(process.execPath, [resolvePnpmCliJs(), "install"], {
     cwd: profileDir,
     env: { ...process.env, DSH_HOME: home }
-  });
+  }));
+  await install(profileDir);
 
   const problems = profileReadiness(manifest, profileDir);
   if (problems.length > 0) {
@@ -205,17 +206,20 @@ export async function setupDshProfile(options = {}) {
   }
 
   log("verifying composed configuration (dsh --dump-config)...");
-  const dump = await collectOutput(process.execPath, [resolveDshCliJs(), "--profile", DSH_PROFILE_NAME, "--dump-config"], {
-    cwd: profileDir,
-    env: { ...process.env, DSH_HOME: home, GALCODE_MCP_SERVER: galcodeMcpServerPath() }
+  const verify = options.verify ?? (async () => {
+    const dump = await collectOutput(process.execPath, [resolveDshCliJs(), "--profile", DSH_PROFILE_NAME, "--dump-config"], {
+      cwd: profileDir,
+      env: { ...process.env, DSH_HOME: home, GALCODE_MCP_SERVER: galcodeMcpServerPath() }
+    });
+    const requiredRows = ["mcp-galcode", "preset-galcode", "@deepseek-ai/dsh-mcp-client", "@deepseek-ai/dsh-agent-preset", DSH_TUI_PACKAGE, DSH_BUNDLE_PACKAGE];
+    const missing = requiredRows.filter((needle) => !dump.includes(needle));
+    if (missing.length > 0) {
+      const dumpLog = path.join(profileDir, "galcode-dump-config.yml");
+      await fs.writeFile(dumpLog, dump, "utf8");
+      throw new Error(`dump-config self-check failed, missing: ${missing.join(", ")} (full dump: ${dumpLog})`);
+    }
   });
-  const requiredRows = ["mcp-galcode", "preset-galcode", "@deepseek-ai/dsh-mcp-client", "@deepseek-ai/dsh-agent-preset", DSH_TUI_PACKAGE, DSH_BUNDLE_PACKAGE];
-  const missing = requiredRows.filter((needle) => !dump.includes(needle));
-  if (missing.length > 0) {
-    const dumpLog = path.join(profileDir, "galcode-dump-config.yml");
-    await fs.writeFile(dumpLog, dump, "utf8");
-    throw new Error(`dump-config self-check failed, missing: ${missing.join(", ")} (full dump: ${dumpLog})`);
-  }
+  await verify(profileDir);
   log("self-check OK: mcp-galcode, preset-galcode, dsh-tui, dsh-galcode all present");
   log("");
   log("Galcode profile ready. Run `galcode` to start the studio.");
@@ -302,8 +306,12 @@ export async function doctorDsh(options = {}) {
   const failed = rows.filter((row) => !row.ok && !row.advisory);
   if (failed.length > 0) {
     console.log("");
-    console.log(`Missing ${failed.length} required component(s). Run \`galcode setup\` for profile issues, or ./install.sh (install.bat on Windows) for WebGAL engine issues.`);
-    process.exitCode = 1;
+    if (options.advisory) {
+      console.log(`Advisory mode: ${failed.length} component(s) missing but exit code stays 0 (CI smoke).`);
+    } else {
+      console.log(`Missing ${failed.length} required component(s). Run \`galcode setup\` for profile issues, or ./install.sh (install.bat on Windows) for WebGAL engine issues.`);
+      process.exitCode = 1;
+    }
   }
   return rows;
 }

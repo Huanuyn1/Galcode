@@ -6,8 +6,9 @@ import net from "node:net";
 import { createHash } from "node:crypto";
 import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { killChildTree } from "./proc.mjs";
 
 // Cross-platform helpers.  Code is shared across macOS / Linux / Windows;
 // only the launcher scripts (galcode / galcode.bat) and README differ.
@@ -30,39 +31,6 @@ async function extractZip(zipPath, destDir) {
 async function safeRmDir(target) {
   try { await fs.rm(target, { recursive: true, force: true }); } catch {
     await run(isWindows ? "cmd" : "rm", isWindows ? ["/c","rd","/s","/q",target] : ["-rf",target]);
-  }
-}
-
-// Kill a spawned child and its whole process tree. Node's child.kill()
-// only reaches the direct child; grandchildren (the vite dev server behind
-// `npm run dev`) would survive as orphans and keep holding ports and file
-// locks, which breaks later runs and even blocks deleting the project
-// folder. Windows uses taskkill /T; POSIX signals the child's process
-// group (server children are spawned detached so they lead their own
-// group; for non-detached children the group signal just fails and we
-// fall back to the plain signal).
-function killChildTree(child, signal = "SIGTERM") {
-  if (!child || child.killed || child.exitCode !== null) return;
-  if (isWindows && child.pid) {
-    try {
-      spawnSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore", windowsHide: true });
-      return;
-    } catch {
-      // fall through to the plain signal below
-    }
-  }
-  if (!isWindows && child.pid) {
-    try {
-      process.kill(-child.pid, signal);
-      return;
-    } catch {
-      // not a process-group leader; fall through to the plain signal below
-    }
-  }
-  try {
-    child.kill(signal);
-  } catch {
-    // process already exited
   }
 }
 

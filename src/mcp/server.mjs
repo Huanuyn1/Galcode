@@ -737,7 +737,7 @@ async function readLogTool(args) {
   };
 }
 
-function validateStory(story, manifest) {
+export function validateStory(story, manifest) {
   const errors = [];
   const warnings = [];
   const assets = new Map((manifest.assets || []).map((asset) => [asset.id, asset]));

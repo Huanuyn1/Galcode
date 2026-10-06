@@ -14,7 +14,8 @@
     "demo": "node ./bin/galcode.js cli yolo --offline --out outputs/demo",
     "install:all": "node ./scripts/galcode-bootstrap.mjs install",
     "start:cli": "node ./scripts/galcode-bootstrap.mjs start",
-    "doctor": "node ./bin/galcode.js doctor"
+    "doctor": "node ./bin/galcode.js doctor",
+    "test": "vitest run"
   },
   "engines": {
     "node": "^22.19 || >=24"
@@ -23,5 +24,8 @@
     "@deepseek-ai/dsh": "0.2.0-rc.2",
     "pnpm": "12.9.1"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "vitest": "^5.0.3"
+  }
 }

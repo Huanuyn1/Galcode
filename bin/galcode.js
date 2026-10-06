@@ -69,7 +69,7 @@ if (first === "cli") {
 } else if (first === "setup" && !hasLegacySetupFlags(argv.slice(1))) {
   await setupDshProfile().catch(reportError);
 } else if (first === "doctor") {
-  await doctorDsh().catch(reportError);
+  await doctorDsh({ advisory: argv.slice(1).includes("--advisory") }).catch(reportError);
 } else if (first === "--version" || first === "-V" || first === "version") {
   console.log(readGalcodeVersion());
 } else if (first === "--help" || first === "-h" || first === "help") {
