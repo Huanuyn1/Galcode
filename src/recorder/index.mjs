@@ -48,7 +48,9 @@ export async function recordProject(projectDir, flags = {}, deps = {}) {
   }
 
   const durationSec = Number(flags.duration || flags.durationSec || await readStoryDuration(projectDir) || 180);
-  const out = path.resolve(flags.out || flags.videoOut || path.join(projectDir, "final.mp4"));
+  // --video-out is the video path. (--out belongs to make/yolo as the PROJECT
+  // dir; the record command translates its own --out into --video-out.)
+  const out = path.resolve(flags.videoOut || path.join(projectDir, "final.mp4"));
   const width = Number(flags.width || 1280);
   const height = Number(flags.height || 720);
   const fps = Number(flags.fps || 60);
@@ -58,25 +60,13 @@ export async function recordProject(projectDir, flags = {}, deps = {}) {
   // ffmpeg is required-for-record: fail before touching the browser.
   await assertFfmpegAvailable(ffmpegCommand);
 
+  // Everything after this point is wrapped so the preview server and the
+  // browser are killed on ANY failure — a leaked detached child keeps the
+  // CLI process alive and holds the port.
   let autoServer = null;
-  let url = flags.url || "";
-  if (!url) {
-    if (!deps.startWebGALPreview) throw new Error("No --url given and no WebGAL preview starter is available.");
-    autoServer = await deps.startWebGALPreview(projectDir, flags);
-    url = autoServer.url;
-  }
-
-  const { executablePath } = await ensureRecorderBrowser({ cacheDir: flags.browserCacheDir ? path.resolve(flags.browserCacheDir) : undefined, log });
-  await fs.mkdir(path.dirname(out), { recursive: true });
-  await fs.rm(out, { force: true });
-
-  const timeoutMs = recordTimeoutMs(durationSec, flags);
-  let timedOut = false;
   let browser = null;
-
-  // Timeout + signal discipline: flip the stop flag so the capture loop ends
-  // gracefully (ffmpeg still finalizes a valid partial file); cleanup in
-  // finally tree-kills browser and preview server either way.
+  let timedOut = false;
+  const timeoutMs = recordTimeoutMs(durationSec, flags);
   const timeoutTimer = setTimeout(() => {
     timedOut = true;
     log(`Recording timed out after ${Math.round(timeoutMs / 1000)}s; finalizing partial output…`);
@@ -91,8 +81,20 @@ export async function recordProject(projectDir, flags = {}, deps = {}) {
 
   let stats = null;
   try {
+    let url = flags.url || "";
+    if (!url) {
+      if (!deps.startWebGALPreview) throw new Error("No --url given and no WebGAL preview starter is available.");
+      autoServer = await deps.startWebGALPreview(projectDir, flags);
+      url = autoServer.url;
+    }
+
+    const ensureBrowser = deps.ensureBrowser || ensureRecorderBrowser;
+    const { executablePath } = await ensureBrowser({ cacheDir: flags.browserCacheDir ? path.resolve(flags.browserCacheDir) : undefined, log });
+    await fs.mkdir(path.dirname(out), { recursive: true });
+    await fs.rm(out, { force: true });
+
     log(`Recording ${width}x${height} @ ${fps} fps, ${durationSec}s, mode=${mode} → ${out}`);
-    browser = await launchRecorderBrowser({ executablePath, mode, width, height });
+    browser = await (deps.launchBrowser || launchRecorderBrowser)({ executablePath, mode, width, height });
     const recorder = mode === "deterministic" ? recordDeterministic : recordRealtime;
     stats = await recorder({
       browser,

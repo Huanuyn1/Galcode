@@ -1156,7 +1156,9 @@ async function createProjectFromBrief({ brief, mode, flags, outDir }) {
   await compileStory(story, manifest, outDir, flags);
 
   if (flags.record) {
-    await recordProject(outDir, flags, { startWebGALPreview });
+    // flags.mode here is the FLOW mode (discuss/yolo); record owns --mode
+    // (realtime|deterministic), so don't let the flow mode leak through.
+    await recordProject(outDir, { ...flags, mode: undefined }, { startWebGALPreview });
   }
 
   console.log(`Galcode project ready: ${outDir}`);
@@ -1206,7 +1208,10 @@ async function compileCommand(flags, positionals) {
 
 async function recordCommand(flags, positionals) {
   const projectDir = path.resolve(positionals[0] || flags.project || ".");
-  await recordProject(projectDir, flags, { startWebGALPreview });
+  // For `galcode record`, --out is the VIDEO file (make/yolo use --out for the
+  // project dir instead; recordProject reads --video-out).
+  const { out, ...rest } = flags;
+  await recordProject(projectDir, { ...rest, videoOut: flags.videoOut || out }, { startWebGALPreview });
 }
 
 async function askCreativeBrief(flags) {
