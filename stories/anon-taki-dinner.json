@@ -1,0 +1,363 @@
+{
+  "title": "三叠半的晚饭",
+  "description": "非商业同人短篇:假期第一天,爱音拎着鼓棒上门求教,鼓没打成,立希煮了一碗面,顺便把一句没说出口的话说了出来。",
+  "durationSec": 92,
+  "characters": ["千早爱音", "椎名立希"],
+  "scenes": [
+    {
+      "id": "stairway-drumsticks",
+      "title": "台阶上的鼓棒",
+      "backgroundAssetId": "figure-背景-立希家楼梯-临时版-png-dcfddfcc1b",
+      "bgmAssetId": "figure-bgm-s-title-mp3-453f3301cc",
+      "actions": [
+        {
+          "type": "narration",
+          "text": "假期第一天的下午，爱音拎着一对鼓棒，站在立希家楼下的台阶上。",
+          "durationSec": 4
+        },
+        {
+          "type": "figure",
+          "character": "千早爱音",
+          "assetId": "figure-chara-爱音-casual-spring-01-adv-live2d-anon-002-casual-spring-01-model3-json-1c01d0c385",
+          "position": "left",
+          "motion": "mtn_smile02_L",
+          "expression": "exp_kime01"
+        },
+        {
+          "type": "figure",
+          "character": "椎名立希",
+          "assetId": "figure-chara-立希-casual-spring-01-adv-live2d-taki-005-casual-spring-01-model3-json-814b6e56c4",
+          "position": "right",
+          "motion": "mtn_look01_R",
+          "expression": "exp_idle02"
+        },
+        {
+          "type": "line",
+          "speaker": "千早爱音",
+          "text": "说好今天教我的。你看，装备已经齐了吧。",
+          "durationSec": 4
+        },
+        {
+          "type": "figure",
+          "character": "椎名立希",
+          "assetId": "figure-chara-立希-casual-spring-01-adv-live2d-taki-005-casual-spring-01-model3-json-814b6e56c4",
+          "position": "right",
+          "motion": "mtn_check01_R",
+          "expression": "exp_amazed01"
+        },
+        {
+          "type": "line",
+          "speaker": "椎名立希",
+          "text": "齐什么。鼓棒是一对没错，可你连鼓谱都没带。",
+          "durationSec": 5
+        },
+        {
+          "type": "figure",
+          "character": "千早爱音",
+          "assetId": "figure-chara-爱音-casual-spring-01-adv-live2d-anon-002-casual-spring-01-model3-json-1c01d0c385",
+          "position": "left",
+          "motion": "mtn_denial01_L",
+          "expression": "exp_smile04"
+        },
+        {
+          "type": "line",
+          "speaker": "千早爱音",
+          "text": "细节！细节不重要。重要的是我现在的干劲。",
+          "durationSec": 4
+        },
+        {
+          "type": "figure",
+          "character": "椎名立希",
+          "assetId": "figure-chara-立希-casual-spring-01-adv-live2d-taki-005-casual-spring-01-model3-json-814b6e56c4",
+          "position": "right",
+          "motion": "mtn_denial02_R",
+          "expression": "exp_amazed02"
+        },
+        {
+          "type": "line",
+          "speaker": "椎名立希",
+          "text": "干劲这种东西，撑不过三天。",
+          "durationSec": 4
+        },
+        {
+          "type": "figure",
+          "character": "千早爱音",
+          "assetId": "figure-chara-爱音-casual-spring-01-adv-live2d-anon-002-casual-spring-01-model3-json-1c01d0c385",
+          "position": "left",
+          "motion": "mtn_smile01_L",
+          "expression": "exp_smile02"
+        },
+        {
+          "type": "figure",
+          "character": "椎名立希",
+          "assetId": "figure-chara-立希-casual-spring-01-adv-live2d-taki-005-casual-spring-01-model3-json-814b6e56c4",
+          "position": "right",
+          "motion": "mtn_nod01_R",
+          "expression": "exp_smile01"
+        },
+        {
+          "type": "narration",
+          "text": "立希侧过身，把门让开。像让一件迟早要进来的麻烦事进来。",
+          "durationSec": 4
+        }
+      ]
+    },
+    {
+      "id": "kitchen-noodles",
+      "title": "三叠半的晚饭",
+      "backgroundAssetId": "figure-背景-三叠半厨房-jpg-696832fafb",
+      "actions": [
+        {
+          "type": "narration",
+          "text": "鼓只打了二十分钟。立希放下鼓棒，转身把面下进锅里。",
+          "durationSec": 4
+        },
+        {
+          "type": "figure",
+          "character": "千早爱音",
+          "assetId": "figure-chara-爱音-casual-spring-01-adv-live2d-anon-002-casual-spring-01-model3-json-1c01d0c385",
+          "position": "left",
+          "motion": "mtn_sad01_L",
+          "expression": "exp_upset01"
+        },
+        {
+          "type": "figure",
+          "character": "椎名立希",
+          "assetId": "figure-chara-立希-casual-spring-01-adv-live2d-taki-005-casual-spring-01-model3-json-814b6e56c4",
+          "position": "right",
+          "motion": "mtn_serious01_R",
+          "expression": "exp_serious01"
+        },
+        {
+          "type": "line",
+          "speaker": "椎名立希",
+          "text": "手腕再这么硬下去，你下周连筷子都拿不稳。",
+          "durationSec": 4
+        },
+        {
+          "type": "figure",
+          "character": "千早爱音",
+          "assetId": "figure-chara-爱音-casual-spring-01-adv-live2d-anon-002-casual-spring-01-model3-json-1c01d0c385",
+          "position": "left",
+          "motion": "mtn_look02_L",
+          "expression": "exp_sad01"
+        },
+        {
+          "type": "line",
+          "speaker": "千早爱音",
+          "text": "……对不起。我今天有点心不在焉。",
+          "durationSec": 4
+        },
+        {
+          "type": "figure",
+          "character": "椎名立希",
+          "assetId": "figure-chara-立希-casual-spring-01-adv-live2d-taki-005-casual-spring-01-model3-json-814b6e56c4",
+          "position": "right",
+          "motion": "mtn_check01_R",
+          "expression": "exp_serious02"
+        },
+        {
+          "type": "line",
+          "speaker": "椎名立希",
+          "text": "看得出来。你从进门开始，就一直在找话讲。",
+          "durationSec": 4
+        },
+        {
+          "type": "figure",
+          "character": "千早爱音",
+          "assetId": "figure-chara-爱音-casual-spring-01-adv-live2d-anon-002-casual-spring-01-model3-json-1c01d0c385",
+          "position": "left",
+          "motion": "mtn_sad01_L",
+          "expression": "exp_sad02"
+        },
+        {
+          "type": "line",
+          "speaker": "千早爱音",
+          "text": "我在想，要是我一直是队里最弱的那个，是不是就该识趣一点。",
+          "durationSec": 6
+        },
+        {
+          "type": "wait",
+          "durationSec": 1
+        },
+        {
+          "type": "figure",
+          "character": "椎名立希",
+          "assetId": "figure-chara-立希-casual-spring-01-adv-live2d-taki-005-casual-spring-01-model3-json-814b6e56c4",
+          "position": "right",
+          "motion": "mtn_angry01_R",
+          "expression": "exp_angry02"
+        },
+        {
+          "type": "line",
+          "speaker": "椎名立希",
+          "text": "谁跟你说的。",
+          "durationSec": 3
+        },
+        {
+          "type": "figure",
+          "character": "千早爱音",
+          "assetId": "figure-chara-爱音-casual-spring-01-adv-live2d-anon-002-casual-spring-01-model3-json-1c01d0c385",
+          "position": "left",
+          "motion": "mtn_surprised01_L",
+          "expression": "exp_surprised01"
+        },
+        {
+          "type": "line",
+          "speaker": "千早爱音",
+          "text": "没人说。我自己半夜想出来的。",
+          "durationSec": 4
+        },
+        {
+          "type": "figure",
+          "character": "椎名立希",
+          "assetId": "figure-chara-立希-casual-spring-01-adv-live2d-taki-005-casual-spring-01-model3-json-814b6e56c4",
+          "position": "right",
+          "motion": "mtn_nod02_R",
+          "expression": "exp_smile01"
+        },
+        {
+          "type": "narration",
+          "text": "立希把碗推过来，汤面晃了一下。她说下一句话的时候，没有看爱音。",
+          "durationSec": 4
+        }
+      ]
+    },
+    {
+      "id": "riverside-railing",
+      "title": "滨河栏杆处",
+      "backgroundAssetId": "figure-背景-滨河栏杆处-jpg-190c7e445c",
+      "actions": [
+        {
+          "type": "narration",
+          "text": "傍晚的河边，风把塑料袋吹得贴在栏杆上。两个人的影子被拉得很长。",
+          "durationSec": 4
+        },
+        {
+          "type": "figure",
+          "character": "千早爱音",
+          "assetId": "figure-chara-爱音-casual-spring-01-adv-live2d-anon-002-casual-spring-01-model3-json-1c01d0c385",
+          "position": "left",
+          "motion": "mtn_look01_L",
+          "expression": "exp_idle02"
+        },
+        {
+          "type": "figure",
+          "character": "椎名立希",
+          "assetId": "figure-chara-立希-casual-spring-01-adv-live2d-taki-005-casual-spring-01-model3-json-814b6e56c4",
+          "position": "right",
+          "motion": "mtn_serious01_R",
+          "expression": "exp_serious01"
+        },
+        {
+          "type": "line",
+          "speaker": "椎名立希",
+          "text": "明天三点，还是这个台阶。迟到的话，鼓棒没收。",
+          "durationSec": 4
+        },
+        {
+          "type": "figure",
+          "character": "千早爱音",
+          "assetId": "figure-chara-爱音-casual-spring-01-adv-live2d-anon-002-casual-spring-01-model3-json-1c01d0c385",
+          "position": "left",
+          "motion": "mtn_smile02_L",
+          "expression": "exp_smile02"
+        },
+        {
+          "type": "line",
+          "speaker": "千早爱音",
+          "text": "你刚才那句「谁跟你说的」，我记住了。",
+          "durationSec": 4
+        },
+        {
+          "type": "figure",
+          "character": "椎名立希",
+          "assetId": "figure-chara-立希-casual-spring-01-adv-live2d-taki-005-casual-spring-01-model3-json-814b6e56c4",
+          "position": "right",
+          "motion": "mtn_denial01_R",
+          "expression": "exp_shy02"
+        },
+        {
+          "type": "line",
+          "speaker": "椎名立希",
+          "text": "……那只是常识。",
+          "durationSec": 3
+        },
+        {
+          "type": "figure",
+          "character": "千早爱音",
+          "assetId": "figure-chara-爱音-casual-spring-01-adv-live2d-anon-002-casual-spring-01-model3-json-1c01d0c385",
+          "position": "left",
+          "motion": "mtn_smile01_L",
+          "expression": "exp_smile04"
+        },
+        {
+          "type": "line",
+          "speaker": "千早爱音",
+          "text": "我知道。不过被当成理所当然的人，好像还挺好的。",
+          "durationSec": 5
+        },
+        {
+          "type": "figure",
+          "character": "椎名立希",
+          "assetId": "figure-chara-立希-casual-spring-01-adv-live2d-taki-005-casual-spring-01-model3-json-814b6e56c4",
+          "position": "right",
+          "motion": "mtn_smile01_R",
+          "expression": "exp_smile01"
+        },
+        {
+          "type": "narration",
+          "text": "她把这句话折起来收好，像收好一根用不上的鼓棒。",
+          "durationSec": 4
+        },
+        {
+          "type": "wait",
+          "durationSec": 2
+        },
+        {
+          "type": "figure",
+          "character": "千早爱音",
+          "assetId": "figure-chara-爱音-casual-spring-01-adv-live2d-anon-002-casual-spring-01-model3-json-1c01d0c385",
+          "position": "left",
+          "motion": "mtn_kime01_L",
+          "expression": "exp_bsmile01"
+        },
+        {
+          "type": "line",
+          "speaker": "千早爱音",
+          "text": "明天我会早到十分钟，气死你。",
+          "durationSec": 4
+        },
+        {
+          "type": "figure",
+          "character": "椎名立希",
+          "assetId": "figure-chara-立希-casual-spring-01-adv-live2d-taki-005-casual-spring-01-model3-json-814b6e56c4",
+          "position": "right",
+          "motion": "mtn_nod01_R",
+          "expression": "exp_smile02"
+        },
+        {
+          "type": "line",
+          "speaker": "椎名立希",
+          "text": "行。我提前十五分钟。",
+          "durationSec": 3
+        }
+      ]
+    }
+  ],
+  "bgm": [
+    {
+      "assetName": "s_Title.mp3",
+      "startSec": 0,
+      "endSec": 92,
+      "volume": 0.25,
+      "fadeIn": 2,
+      "fadeOut": 3
+    }
+  ],
+  "video": {
+    "title": "【Galcode】三叠半的晚饭",
+    "description": "由 Galcode 生成的非商业 WebGAL 同人短篇。爱音 × 立希，一碗面换一句话。",
+    "tags": ["MyGO", "AveMujica", "WebGAL", "Galcode", "千早爱音", "椎名立希"]
+  }
+}

@@ -42,6 +42,12 @@
                 6. 用户提出要成片/视频时,调用 mcp__galcode__galcode_render_video 录制(返回 jobId,用 galcode_job_status 轮询,完成后视频在项目目录 final.mp4;可传 duration/fps/mode;录制需要 ffmpeg,首次会自动下载约 120MB 的录制浏览器)。
                 7. 用户提出修改意见时,调整 story JSON 后重新走 校验 → 编译 → 预览。
 
+                环境与依赖自检职责:
+                - 首次对话、或用户报告"看不到模型/预览打不开/录制失败"等问题时,先读取 galcode://runtime-status 资源(或请用户运行 `galcode doctor`),确认 WebGAL 引擎、Live2D runtime、ffmpeg、录制浏览器的状态,再开始创作或排查。
+                - 缺什么引导装什么:引擎缺失 → 请用户运行安装脚本;Live2D runtime 缺失 → 说明这是 Live2D 公司的版权材料,引导用户从官方 Cubism SDK for Web 或社区渠道自行获取后运行 `galcode cli install-live2d-runtime --from <目录>`;录制浏览器首次使用会自动下载,向用户说明体积(约 120MB)即可。
+                - 涉及下载/安装等重型操作前,先简要说明要做什么、需要多久,征得用户同意再执行;不要默默安装。
+                - 排查问题时把 doctor/runtime-status 的实际输出翻译成人话,不要只复述状态码。
+
                 你需要掌握的技术知识:
                 - 角色在屏幕上有三个固定站位(左/中/右),同一场景中尽量保持不变
                 - 每个站位最多一个角色,同一个角色不能同时出现在多个站位
