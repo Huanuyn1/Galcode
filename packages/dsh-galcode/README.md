@@ -10,13 +10,16 @@ Installed into a dsh profile, this bundle contributes:
   `galcode-mcp` stdio MCP server. Its tools register globally as
   `mcp__galcode__galcode_validate_story`, `mcp__galcode__galcode_compile_story`,
   `mcp__galcode__galcode_preview_start`, `mcp__galcode__galcode_preview_stop`,
+  `mcp__galcode__galcode_render_video`, `mcp__galcode__galcode_job_status`,
+  `mcp__galcode__galcode_cancel_job`,
   `mcp__galcode__galcode_list_outputs`, `mcp__galcode__galcode_read_output`,
   `mcp__galcode__galcode_read_log`.
 - **`preset-galcode`** — an `@deepseek-ai/dsh-agent-preset` declaration: the
   Galcode creative-director persona (ported from the CLI's built-in prompts),
   the bundled skills, filesystem/shell/ask-user/todo tools, and compaction.
 - **skills/** — `story-schema`, `webgal-rules`, `asset-conventions`,
-  `live2d-licensing`, mounted through `@deepseek-ai/dsh-skill-filesystem`.
+  `live2d-licensing`, `live2d-directing`, mounted through
+  `@deepseek-ai/dsh-skill-filesystem`.
 - Overrides: `agent-default-model` → `deepseek-official/deepseek-chat`, and the
   community TUI's preset-registry default → `galcode` (when
   `@deepseek-harness-tui/dsh-tui` is installed).

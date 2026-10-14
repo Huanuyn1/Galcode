@@ -5,10 +5,16 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
+import { killChildTree } from "../proc.mjs";
+import { recorderBrowserStatus } from "../recorder/browser.mjs";
+import { probeCubismCoreGeneration } from "../live2d-compat.mjs";
 
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const GALCODE_BIN = path.join(ROOT_DIR, "bin", "galcode.js");
-const MCP_DIR = path.join(ROOT_DIR, ".galcode", "mcp");
+// GALCODE_MCP_DIR overrides the state directory (used by tests to stay hermetic).
+const MCP_DIR = process.env.GALCODE_MCP_DIR
+  ? path.resolve(process.env.GALCODE_MCP_DIR)
+  : path.join(ROOT_DIR, ".galcode", "mcp");
 const JOB_DIR = path.join(MCP_DIR, "jobs");
 const STORY_DIR = path.join(MCP_DIR, "stories");
 const DEFAULT_MANIFEST = path.join(MCP_DIR, "asset-manifest.json");
@@ -483,6 +489,46 @@ function toolDefinitions() {
       }
     },
     {
+      name: "galcode_render_video",
+      description: "Record a compiled Galcode project to an mp4 video as a tracked background job (chrome-headless-shell + ffmpeg, BGM post-mix included). Returns immediately; poll with galcode_job_status and read logs with galcode_read_log.",
+      inputSchema: {
+        type: "object",
+        required: ["projectDir"],
+        properties: {
+          projectDir: { type: "string", description: "Compiled project directory under the project root." },
+          videoOut: { type: "string", description: "Output mp4 path under the project root. Defaults to <projectDir>/final.mp4." },
+          duration: { type: "number", description: "Recording duration in seconds. Defaults to the compiled story timeline." },
+          fps: { type: "number", description: "Target frames per second. Defaults to 30." },
+          width: { type: "number", description: "Video width. Defaults to 1280." },
+          height: { type: "number", description: "Video height. Defaults to 720." },
+          mode: { type: "string", enum: ["realtime", "deterministic"], description: "Capture mode. realtime (default) paces CDP screencast frames; deterministic (experimental) drives HeadlessExperimental.beginFrame on a virtual frame clock." },
+          noBgm: { type: "boolean", description: "Skip the BGM post-mix step." }
+        }
+      }
+    },
+    {
+      name: "galcode_job_status",
+      description: "Read the status of any Galcode MCP job (preview or render), including jobs from before a server restart.",
+      inputSchema: {
+        type: "object",
+        required: ["jobId"],
+        properties: {
+          jobId: { type: "string", description: "Job id returned by galcode_preview_start or galcode_render_video." }
+        }
+      }
+    },
+    {
+      name: "galcode_cancel_job",
+      description: "Cancel an active Galcode MCP job. Render jobs stop gracefully (a valid partial video is kept when possible).",
+      inputSchema: {
+        type: "object",
+        required: ["jobId"],
+        properties: {
+          jobId: { type: "string", description: "Job id returned by galcode_preview_start or galcode_render_video." }
+        }
+      }
+    },
+    {
       name: "galcode_list_outputs",
       description: "List generated Galcode output directories and important files.",
       inputSchema: {
@@ -525,6 +571,9 @@ async function callTool(name, args) {
   if (name === "galcode_compile_story") return asText(await compileStoryTool(args));
   if (name === "galcode_preview_start") return asText(await previewStartTool(args));
   if (name === "galcode_preview_stop") return asText(await previewStopTool(args));
+  if (name === "galcode_render_video") return asText(await renderVideoTool(args));
+  if (name === "galcode_job_status") return asText(await jobStatusTool(args));
+  if (name === "galcode_cancel_job") return asText(await cancelJobTool(args));
   if (name === "galcode_list_outputs") return asText(await listOutputsTool(args));
   if (name === "galcode_read_output") return asText(await readOutputTool(args));
   if (name === "galcode_read_log") return asText(await readLogTool(args));
@@ -767,6 +816,153 @@ async function previewStopTool(args) {
   });
   if (!exited) child.kill("SIGKILL");
   return { ok: true, jobId, status: "stopped" };
+}
+
+// galcode_render_video: spawn `galcode cli record` as a tracked finite job.
+// The child is detached on POSIX so killChildTree can reach the whole group;
+// graceful stop still goes through galcode's own SIGTERM handler (it finalizes
+// ffmpeg and tree-kills the vite/chrome groups it spawned).
+export async function renderVideoTool(args) {
+  const mode = args.mode !== undefined ? String(args.mode) : "";
+  if (mode && !["realtime", "deterministic"].includes(mode)) {
+    throw new Error(`Unknown mode: ${mode}. Use realtime or deterministic.`);
+  }
+  const projectDir = resolveInsideRoot(requiredString(args.projectDir, "projectDir"));
+  if (!fssync.existsSync(path.join(projectDir, "game", "scene", "start.txt"))) {
+    throw new Error(`Not a compiled Galcode project directory: ${projectDir}`);
+  }
+  const videoOut = args.videoOut
+    ? resolveInsideRoot(args.videoOut)
+    : path.join(projectDir, "final.mp4");
+
+  const jobId = `record-${timestampSlug()}-${randomUUID().slice(0, 8)}`;
+  const logPath = path.join(JOB_DIR, `${jobId}.log`);
+  const jobPath = path.join(JOB_DIR, `${jobId}.json`);
+  await ensureDir(JOB_DIR);
+
+  const commandArgs = ["cli", "record", projectDir, "--video-out", videoOut];
+  if (args.duration) commandArgs.push("--duration", String(args.duration));
+  if (args.fps) commandArgs.push("--fps", String(args.fps));
+  if (args.width) commandArgs.push("--width", String(args.width));
+  if (args.height) commandArgs.push("--height", String(args.height));
+  if (mode) commandArgs.push("--mode", mode);
+  if (args.noBgm) commandArgs.push("--no-bgm");
+
+  const job = {
+    id: jobId,
+    type: "record",
+    status: "starting",
+    projectDir,
+    videoOut,
+    logPath,
+    command: ["node", GALCODE_BIN, ...commandArgs],
+    startedAt: new Date().toISOString()
+  };
+  await writeJson(jobPath, job);
+
+  const child = spawn(process.execPath, [GALCODE_BIN, ...commandArgs], {
+    cwd: ROOT_DIR,
+    env: { ...process.env, GALCODE_ROOT: ROOT_DIR },
+    stdio: ["ignore", "pipe", "pipe"],
+    detached: process.platform !== "win32"
+  });
+  runningJobs.set(jobId, child);
+  const log = await fs.open(logPath, "a");
+  const writeLog = async (chunk) => {
+    await log.appendFile(chunk).catch(() => {});
+  };
+  child.stdout.on("data", (chunk) => void writeLog(chunk));
+  child.stderr.on("data", (chunk) => void writeLog(chunk));
+  child.on("error", (error) => void writeLog(Buffer.from(`\n[process error] ${error.message}\n`)));
+  child.on("exit", async (code, signal) => {
+    runningJobs.delete(jobId);
+    await log.close().catch(() => {});
+    const produced = fssync.existsSync(videoOut) && fssync.statSync(videoOut).size > 0;
+    await writeJson(jobPath, {
+      ...job,
+      pid: child.pid,
+      status: code === 0 ? "completed" : produced ? "completed-partial" : "failed",
+      exitCode: code,
+      signal,
+      producedVideo: produced,
+      finishedAt: new Date().toISOString()
+    }).catch(() => {});
+  });
+
+  job.status = "running";
+  job.pid = child.pid;
+  await writeJson(jobPath, job);
+  return {
+    ok: true,
+    jobId,
+    status: "running",
+    projectDir,
+    videoOut,
+    logPath,
+    message: "Recording is running. Poll galcode_job_status; read progress with galcode_read_log; stop it with galcode_cancel_job (a valid partial video is kept when possible)."
+  };
+}
+
+async function readJobFile(jobId) {
+  const jobPath = path.join(JOB_DIR, `${safeName(requiredString(jobId, "jobId"))}.json`);
+  if (!isInside(JOB_DIR, jobPath) || !fssync.existsSync(jobPath)) throw new Error(`Unknown job: ${jobId}`);
+  return JSON.parse(await fs.readFile(jobPath, "utf8"));
+}
+
+export async function jobStatusTool(args) {
+  const job = await readJobFile(args.jobId);
+  const liveChild = runningJobs.get(job.id);
+  let alive = Boolean(liveChild);
+  // After an MCP server restart the job file is all we have; the recorded pid
+  // lets us still tell a genuinely-running job apart from an interrupted one.
+  if (!alive && typeof job.pid === "number" && ["starting", "running"].includes(job.status)) {
+    try { process.kill(job.pid, 0); alive = true; } catch { /* not alive */ }
+  }
+  return {
+    jobId: job.id,
+    type: job.type,
+    status: job.status,
+    active: alive,
+    projectDir: job.projectDir,
+    url: job.url,
+    videoOut: job.videoOut,
+    producedVideo: job.producedVideo,
+    exitCode: job.exitCode,
+    startedAt: job.startedAt,
+    finishedAt: job.finishedAt,
+    logPath: job.logPath
+  };
+}
+
+export async function cancelJobTool(args) {
+  const job = await readJobFile(args.jobId);
+  const child = runningJobs.get(job.id);
+  if (!child) {
+    return {
+      ok: false,
+      jobId: job.id,
+      status: job.status,
+      message: "Job is not active in this MCP server process. It may have finished already or the server was restarted."
+    };
+  }
+  killChildTree(child, "SIGTERM");
+  const exited = await new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(false), 10000);
+    child.once("exit", () => {
+      clearTimeout(timer);
+      resolve(true);
+    });
+  });
+  if (!exited) killChildTree(child, "SIGKILL");
+  return {
+    ok: true,
+    jobId: job.id,
+    status: "cancelled",
+    graceful: exited,
+    message: exited
+      ? "Job stopped gracefully. For render jobs, a valid partial video is kept when ffmpeg had already written output."
+      : "Job did not exit within 10s of SIGTERM; escalated to SIGKILL (a partial video may be missing its finalization)."
+  };
 }
 
 async function listOutputsTool(args) {
@@ -1031,6 +1227,8 @@ function matchesCharacter(value, character) {
 async function runtimeStatus() {
   const webgalDir = path.join(ROOT_DIR, "vendor", "webgal-mygo", "packages", "webgal");
   const live2dLib = path.join(webgalDir, "public", "lib");
+  const coreProbe = probeCubismCoreGeneration(live2dLib);
+  const browser = await recorderBrowserStatus();
   return {
     rootDir: ROOT_DIR,
     node: process.version,
@@ -1045,8 +1243,24 @@ async function runtimeStatus() {
       libDir: live2dLib,
       files: {
         "live2d.min.js": fssync.existsSync(path.join(live2dLib, "live2d.min.js")),
-        "live2dcubismcore.min.js": fssync.existsSync(path.join(live2dLib, "live2dcubismcore.min.js"))
+        "live2dcubismcore.min.js": coreProbe.present
+      },
+      // chara pack models are Cubism 5 (moc3 format v5) and need the Cubism 5
+      // core; generation is a size heuristic — the record command probes the
+      // page authoritatively before capturing.
+      cubismCore: {
+        generation: coreProbe.generation,
+        heuristic: coreProbe.heuristic,
+        bytes: coreProbe.bytes,
+        note: `${coreProbe.note}; chara pack models (moc3 v5) require generation 5`
       }
+    },
+    recorderBrowser: {
+      kind: "chrome-headless-shell",
+      installed: browser.installed,
+      ok: browser.ok,
+      buildId: browser.buildId || null,
+      note: browser.detail
     }
   };
 }

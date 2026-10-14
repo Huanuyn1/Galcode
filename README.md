@@ -163,6 +163,9 @@ Claude Desktop 配置示例（npm 全局安装后 `galcode-mcp` 在 PATH 上）�
 | `galcode_compile_story` | 把 story JSON 编译成 WebGAL 工程（不启动预览） |
 | `galcode_preview_start` | 以后台任务启动本地预览服务器，返回 URL |
 | `galcode_preview_stop` | 停止预览服务器 |
+| `galcode_render_video` | 以后台任务录制成片（等价 `galcode cli record`；返回 jobId） |
+| `galcode_job_status` | 查询预览/录制任务状态（含服务重启前的历史任务） |
+| `galcode_cancel_job` | 取消进行中的任务；录制任务会优雅收尾并保留半成品 |
 | `galcode_list_outputs` | 列出已生成的作品目录 |
 | `galcode_read_output` | 读取作品的 story.json、start.txt 或 README |
 | `galcode_read_log` | 读取预览任务日志或项目内其他日志 |
