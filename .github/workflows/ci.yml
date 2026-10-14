@@ -73,3 +73,30 @@ jobs:
         run: |
           test -f outputs/ci-smoke/game/scene/start.txt
           grep -q "^end;" outputs/ci-smoke/game/scene/start.txt
+
+  record-smoke:
+    # ubuntu-only: downloads the pinned chrome-headless-shell (~120 MB, fast
+    # from GitHub runners; GALCODE_CHROME_DOWNLOAD_BASE_URL can point at a
+    # mirror) and records a 5s data:-URL page — deliberately NOT WebGAL, the
+    # vendored engine is too heavy for CI. Set GALCODE_CI_SKIP_RECORD_SMOKE=1
+    # on the job env to skip without failing (e.g. for offline CI runners).
+    name: record smoke (ubuntu)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Record 5s data-URL smoke video
+        run: node scripts/ci-record-smoke.mjs
