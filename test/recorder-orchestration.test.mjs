@@ -32,6 +32,9 @@ describe("resolveRecordMode / recordTimeoutMs", () => {
     expect(recordTimeoutMs(0)).toBe(180000);
     expect(recordTimeoutMs(600)).toBe(1380000);
     expect(recordTimeoutMs(15, { recordTimeout: 5000 })).toBe(5000);
+    // deterministic renders ~6x slower than wall clock — wider allowance
+    expect(recordTimeoutMs(15, { mode: "deterministic" })).toBe(300000);
+    expect(recordTimeoutMs(600, { mode: "deterministic" })).toBe(4980000);
   });
 });
 

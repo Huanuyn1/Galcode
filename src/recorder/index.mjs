@@ -38,7 +38,11 @@ export function resolveRecordMode(flags = {}) {
 }
 
 export function recordTimeoutMs(durationSec, flags = {}) {
-  return Number(flags.recordTimeout || Math.max(180000, durationSec * 2000 + 180000));
+  // realtime capture runs at wall-clock speed (duration*2 is generous);
+  // deterministic mode renders as fast as SwiftShader can — observed ~10
+  // virtual fps at 720p60, i.e. ~6x wall time. Give it headroom.
+  const perSecond = resolveRecordMode(flags) === "deterministic" ? 8000 : 2000;
+  return Number(flags.recordTimeout || Math.max(180000, durationSec * perSecond + 180000));
 }
 
 export async function recordProject(projectDir, flags = {}, deps = {}) {
