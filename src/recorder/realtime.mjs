@@ -70,12 +70,13 @@ export async function recordRealtime({
     }).catch(() => {});
   }, TITLE_CHECK_INTERVAL_MS);
 
-  const useScreencast = process.env.GALCODE_SCREENCAST === "1";
+  const captureStrategy = process.env.GALCODE_CAPTURE === "screenshot" ? "screenshot" : "screencast";
+  log(`Capture strategy: ${captureStrategy}`);
   let stats;
   try {
-    stats = useScreencast
-      ? await captureViaScreencast({ session, encoder, fps, durationSec, width, height, jpegQuality, shouldStop: () => shouldStop() || stoppedOnTitle, log })
-      : await captureViaScreenshots({ session, encoder, fps, durationSec, jpegQuality, shouldStop: () => shouldStop() || stoppedOnTitle, log });
+    stats = captureStrategy === "screenshot"
+      ? await captureViaScreenshots({ session, encoder, fps, durationSec, jpegQuality, shouldStop: () => shouldStop() || stoppedOnTitle, log })
+      : await captureViaScreencast({ session, encoder, fps, durationSec, width, height, jpegQuality, shouldStop: () => shouldStop() || stoppedOnTitle, log });
   } catch (error) {
     abortEncoder(encoder);
     throw error;
@@ -116,11 +117,11 @@ async function captureViaScreenshots({ session, encoder, fps, durationSec, jpegQ
 
 async function captureViaScreencast({ session, encoder, fps, durationSec, width, height, jpegQuality, shouldStop, log }) {
   let latest = null;
-  let received = 0;
+  let delivered = 0;
   const waiters = [];
   const onFrame = (event) => {
     latest = Buffer.from(event.data, "base64");
-    received += 1;
+    delivered += 1;
     session.send("Page.screencastFrameAck", { sessionId: event.sessionId }).catch(() => {});
     const waiter = waiters.shift();
     if (waiter) waiter();
@@ -130,6 +131,7 @@ async function captureViaScreencast({ session, encoder, fps, durationSec, width,
   const frameMs = 1000 / fps;
   const totalFrames = Math.max(1, Math.round(durationSec * fps));
   let frames = 0;
+  let uniqueFrames = 0;
   let duplicated = 0;
   try {
     await session.send("Page.startScreencast", {
@@ -146,16 +148,22 @@ async function captureViaScreencast({ session, encoder, fps, durationSec, width,
       await Promise.race([new Promise((resolve) => waiters.push(resolve)), sleep(250)]);
     }
     if (!latest) throw new Error("Page.startScreencast produced no frames within 5s");
+    let writtenBuffer = null;
     for (let frame = 0; frame < totalFrames && !shouldStop(); frame += 1) {
       const target = started + frame * frameMs;
       const delay = target - Date.now();
       if (delay > 1) await sleep(delay - 0.5);
+      // Realtime mapping: a slot with no fresh compositor frame repeats the
+      // last one — story timing stays 1:1 with the wall clock.
+      if (latest === writtenBuffer) duplicated += 1;
+      else uniqueFrames += 1;
+      writtenBuffer = latest;
       await writeFrame(encoder, latest);
       frames += 1;
     }
     const wallSec = Math.max(0.001, (Date.now() - started) / 1000);
-    log(`Screencast delivered ${received} frames over ${wallSec.toFixed(2)}s (${(received / wallSec).toFixed(2)} fps delivered)`);
-    return { frames, driftCorrections: 0, wallSec, deliveredFrames: received, duplicatedFrames: duplicated };
+    log(`Screencast delivered ${delivered} compositor frames over ${wallSec.toFixed(2)}s (${(delivered / wallSec).toFixed(2)} fps delivered)`);
+    return { frames, uniqueFrames, duplicatedFrames: duplicated, driftCorrections: 0, wallSec, deliveredFrames: delivered };
   } finally {
     session.off("Page.screencastFrame", onFrame);
     await session.send("Page.stopScreencast").catch(() => {});
