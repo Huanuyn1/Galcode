@@ -9,6 +9,19 @@ whenToUse: story JSON 中出现 pack='chara' 的 Live2D 模型,或需要为 figu
 chara 包是现在的主力 Live2D 资产(Cubism 3/4,25 个主要角色 + sub_* 配角)。
 素材清单里 `pack: "chara"` 的模型适用本页规则;旧包(`anon_idle01` 式命名)规则不同,不要混用。
 
+## 运行时要求(先读这个,排查"模型不出来")
+
+- chara 包的模型是 **Cubism 5 格式**(.moc3 文件格式版本 v5),WebGAL 引擎里的
+  `live2dcubismcore.min.js` 必须是 **Cubism 5 的核心**(官方 Cubism 5 SDK for Web)。
+  旧的 4.2 核心装不了 v5 模型。
+- 症状:预览/录制里**背景和文字正常、角色模型完全不出现**,控制台有 `_CubismMoc.create` 报错。
+  先怀疑运行时,再怀疑资产:跑 `galcode doctor` 看 Live2D runtime 行(会标注核心世代),
+  或读 `galcode://runtime-status` 的 `live2dRuntime.cubismCore`。
+- 修法:用 Cubism 5 SDK for Web 的 `live2dcubismcore.min.js` 替换
+  `vendor/webgal-mygo/packages/webgal/public/lib/` 里的同名文件(该文件有版权,仓库不内置)。
+- 编译时 Galcode 会扫描工程里的 moc3 版本并在核心不匹配时打印 WARNING;录制前还会在页面里
+  实测 `csmGetLatestMocVersion` 再确认一次。
+
 ## 模型路径约定
 
 assetId 对应的模型路径永远是**被演出角色自己**的模型:
@@ -41,6 +54,16 @@ chara/<角色>/<服装>/<file>.model3.json
 | `D01_`~`D05_` | 蕾叶、臬咲、宁月、千樱梨、心玖 | 一家 Dumb Rock! |
 
 跨角色借用可能因模型参数差异而效果打折;优先借用 MyGO/Ave Mujica 团内(A01-A10)的动作,覆盖率最高。
+
+### 参数覆盖率(决定"能不能动",见 figure/chara/name.md)
+
+动作/表情文件按**参数 ID** 驱动,而每个模型的参数表不同(149~224 个)。借用的名字能加载,
+但目标模型缺的参数会被引擎**静默忽略**(Live2D 正常行为,不报错):
+
+- 优先同组借用(MyGO/Mujica 团内 A01-A10 互相借用覆盖率最高);
+- 约 **13% 的跨角色动作覆盖率 <50%**,播出来几乎不动、看起来像"回到默认神态" —— 给演出挑
+  动作时避开冷门跨组借用(如 D 组动作借给 A 组角色),不确定就退回原生裸名;
+- 完整动作 × 目标覆盖率矩阵的统计口径见 `figure/chara/name.md` 第六节。
 
 ## 名字的结构
 
@@ -83,3 +106,9 @@ chara/<角色>/<服装>/<file>.model3.json
 `figure/chara/表情动作总表.md`(可用文件工具读取,按 `A01_爱音` 等小节检索)。
 命名/前缀的维护文档见 `figure/chara/name.md`。
 若这两个文件不存在(chara 包未安装),只用 galcode://assets 清单里列出的原生名,不要跨角色调用。
+
+## 预览缓存坑
+
+WebGAL 工程导出后带一个 cache-first 的 service worker,会**永久缓存** `/game/figure/*`。
+迭代模型/动作文件后如果预览里"改了没反应",不是编译问题:硬刷新(Ctrl/Cmd+Shift+R)
+或在 DevTools 里清掉 service worker 缓存再看。

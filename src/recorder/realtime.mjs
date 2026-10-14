@@ -1,5 +1,6 @@
 import { startMjpegEncoder, writeFrame, finishEncoder, abortEncoder } from "./ffmpeg.mjs";
-import { installLanguagePreset, prepareWebGALPage, isTitleVisible, sleep } from "./webgal-page.mjs";
+import { installLanguagePreset, prepareWebGALPage, isTitleVisible, probePageCubismCore, sleep } from "./webgal-page.mjs";
+import { live2dCoreMismatchWarning } from "../live2d-compat.mjs";
 import { runPacedCapture } from "./pacing.mjs";
 
 // Realtime mode (default, parity with the deleted Electron recorder): the
@@ -36,6 +37,7 @@ export async function recordRealtime({
   autoAdvanceIntervalMs = 4000,
   noAutoplay = false,
   stopOnTitle = false,
+  requiredMocVersion = 0,
   shouldStop = () => false,
   log = () => {}
 } = {}) {
@@ -46,6 +48,15 @@ export async function recordRealtime({
   await prepareWebGALPage(page, {
     width, height, startDelayMs, sceneDelayMs, noAutoplay, autoAdvanceIntervalMs, log
   });
+
+  // Authoritative Live2D core check: the compile-time side is a heuristic,
+  // this one reads csmGetLatestMocVersion from the actual page.
+  if (requiredMocVersion >= 5) {
+    const latest = await probePageCubismCore(page);
+    if (latest === null || latest < requiredMocVersion) {
+      log(`WARNING: ${live2dCoreMismatchWarning(requiredMocVersion, latest)}`);
+    }
+  }
 
   const session = await page.createCDPSession();
   const encoder = startMjpegEncoder({ ffmpeg, out, fps, crf, log });

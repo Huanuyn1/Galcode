@@ -7,6 +7,7 @@ import { assertFfmpegAvailable } from "./ffmpeg.mjs";
 import { recordRealtime } from "./realtime.mjs";
 import { recordDeterministic } from "./deterministic.mjs";
 import { mixBgm } from "./mix-bgm.mjs";
+import { scanMoc3Versions } from "../live2d-compat.mjs";
 
 // `galcode record` orchestration, ported from legacy recordProject (~:2841):
 // resolve the duration contract (--duration wins, else the compiled story
@@ -93,6 +94,10 @@ export async function recordProject(projectDir, flags = {}, deps = {}) {
     await fs.mkdir(path.dirname(out), { recursive: true });
     await fs.rm(out, { force: true });
 
+    // moc3 v5 (Cubism 5 / chara pack) needs a matching core; the recorder
+    // probes the page authoritatively and warns when the runtime is too old.
+    const mocScan = await scanMoc3Versions(path.join(projectDir, "game"));
+
     log(`Recording ${width}x${height} @ ${fps} fps, ${durationSec}s, mode=${mode} → ${out}`);
     browser = await (deps.launchBrowser || launchRecorderBrowser)({ executablePath, mode, width, height });
     const recorder = mode === "deterministic" ? recordDeterministic : recordRealtime;
@@ -111,6 +116,7 @@ export async function recordProject(projectDir, flags = {}, deps = {}) {
       autoAdvanceIntervalMs: flags.clickInterval ? Number(flags.clickInterval) : 4000,
       noAutoplay: Boolean(flags.noAutoplay),
       stopOnTitle: Boolean(flags.stopOnTitle),
+      requiredMocVersion: mocScan.maxVersion || 0,
       shouldStop: () => timedOut,
       log
     });

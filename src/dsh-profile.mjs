@@ -6,6 +6,7 @@ import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { recorderBrowserStatus } from "./recorder/browser.mjs";
+import { probeCubismCoreGeneration } from "./live2d-compat.mjs";
 
 // dsh (DeepSeek Harness) integration for the Galcode launcher: DSH_HOME
 // resolution, idempotent `galcode` profile setup, dsh process spawning, and
@@ -293,7 +294,11 @@ export async function doctorDsh(options = {}) {
 
   const live2dLib = path.join(webgalDir, "packages", "webgal", "public", "lib");
   const live2dMissing = ["live2d.min.js", "live2dcubismcore.min.js"].filter((file) => !fssync.existsSync(path.join(live2dLib, file)));
-  push("Live2D runtime", live2dMissing.length === 0 ? live2dLib : `missing ${live2dMissing.join(", ")} (Live2D disabled; see skill live2d-licensing)`, live2dMissing.length === 0, true);
+  const coreProbe = probeCubismCoreGeneration(live2dLib);
+  const live2dValue = live2dMissing.length === 0
+    ? `${live2dLib} — ${coreProbe.note}`
+    : `missing ${live2dMissing.join(", ")} (Live2D disabled; see skill live2d-licensing)`;
+  push("Live2D runtime", live2dValue, live2dMissing.length === 0 && coreProbe.generation !== 4, true);
 
   const ffmpeg = await probeCommand("ffmpeg", ["-version"]);
   push("ffmpeg (required for `galcode record`)", ffmpeg || "not found — recording unavailable; install ffmpeg", Boolean(ffmpeg), true);

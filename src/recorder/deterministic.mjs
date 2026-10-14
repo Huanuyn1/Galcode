@@ -5,8 +5,10 @@ import {
   isTitleVisible,
   clickElementByText,
   startVirtualAutoAdvance,
-  readVirtualClock
+  readVirtualClock,
+  probePageCubismCore
 } from "./webgal-page.mjs";
+import { live2dCoreMismatchWarning } from "../live2d-compat.mjs";
 
 // Deterministic mode (experimental, --deterministic): chrome-headless-shell is
 // launched with --enable-begin-frame-control et al., so the compositor only
@@ -36,6 +38,7 @@ export async function recordDeterministic({
   jpegQuality = 92,
   sceneDelayMs = 8000,
   autoAdvanceSec = 4,
+  requiredMocVersion = 0,
   shouldStop = () => false,
   log = () => {}
 } = {}) {
@@ -127,6 +130,14 @@ export async function recordDeterministic({
     }
 
     await pumpUntil(() => isVisible(CANVAS_SELECTOR), fps * 45, "stage canvas");
+
+    // Authoritative Live2D core check (in-page), same as realtime mode.
+    if (requiredMocVersion >= 5) {
+      const latest = await probePageCubismCore(page);
+      if (latest === null || latest < requiredMocVersion) {
+        log(`WARNING: ${live2dCoreMismatchWarning(requiredMocVersion, latest)}`);
+      }
+    }
 
     // Virtual-clock auto-advancer + rAF liveness self-check: if rAF does not
     // follow beginFrame, WebGAL (PIXI) cannot animate and this mode is a

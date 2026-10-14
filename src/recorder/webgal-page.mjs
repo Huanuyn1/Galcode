@@ -229,3 +229,16 @@ export async function readVirtualClock(page) {
     advances: window.__galcodeVirtualAdvances || 0
   })).catch(() => ({ rafTicks: 0, advances: 0 }));
 }
+
+// Authoritative runtime check: the moc3 format version the page's
+// live2dcubismcore.min.js actually supports (null = core not loaded).
+export async function probePageCubismCore(page) {
+  return await page.evaluate(() => {
+    try {
+      const version = window.Live2DCubismCore?.Version;
+      return typeof version?.csmGetLatestMocVersion === "function" ? version.csmGetLatestMocVersion() : null;
+    } catch {
+      return null;
+    }
+  }).catch(() => null);
+}

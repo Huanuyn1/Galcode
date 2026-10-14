@@ -10,6 +10,7 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { killChildTree } from "./proc.mjs";
 import { recordProject } from "./recorder/index.mjs";
+import { checkLive2DCompat } from "./live2d-compat.mjs";
 
 // Cross-platform helpers.  Code is shared across macOS / Linux / Windows;
 // only the launcher scripts (galcode / galcode.bat) and README differ.
@@ -214,7 +215,11 @@ const DEFAULT_WRITER_PROMPT = [
   "  B01_茉幌 B02_朋花 B03_萤 B04_枣 B05_凪;C01_阿拉蕾 C02_都子 C03_律 C04_野乃花 C05_由乃;",
   "  D01_蕾叶 D02_臬咲 D03_宁月 D04_千樱梨 D05_心玖。",
   "  跨角色动作可能因参数差异效果打折,借用时优先选 MyGO/Ave Mujica 团内(A01-A10)的动作。",
+  "  注意:跨角色借用按参数 ID 驱动,目标模型缺的参数会被静默忽略;约 13% 的跨角色动作覆盖率不足 50%,",
+  "  播出来几乎不动(像回到默认神态)。不确定时退回该模型的原生裸名。",
   "- assetId 永远用角色自己的模型(借表情/动作只改名字,不换模型)。",
+  "- chara 模型是 Cubism 5 格式(moc3 v5),需要 WebGAL 引擎安装 Cubism 5 核心才能渲染;",
+  "  编译/录制时 Galcode 会自动检查并在不匹配时告警,看到告警就先提醒用户换核心文件。",
   "- chara 模型的 motion/expression 会原样写入脚本(不会加 anon_ 之类前缀),所以名字必须精确。",
   "- 绝对不要编造名字。原生名从角色资产指南的 motions/expressions 列表选;",
   "  完整跨角色清单见 figure/chara/表情动作总表.md(若可读取)。",
@@ -2359,6 +2364,13 @@ async function compileStory(story, manifest, outDir, flags) {
 
   const themeDir = await resolveThemeDir(flags);
   if (themeDir) await copyDir(themeDir, path.join(gameDir, "template"));
+
+  // Cubism 5 (chara pack) models need the Cubism 5 core in the WebGAL engine;
+  // warn loudly when the installed core looks incompatible (moc3 version bytes
+  // are exact; the core side is a documented heuristic — the authoritative
+  // check runs in-page at record time).
+  const live2dCompat = await checkLive2DCompat(gameDir, path.join(path.resolve(flags.webgalDir || "vendor/webgal-mygo/packages/webgal"), "public", "lib"));
+  if (live2dCompat.warning) console.warn(`\n[Live2D] WARNING: ${live2dCompat.warning}\n`);
 
   await writeJson(path.join(outDir, "story.json"), story);
   await fs.writeFile(path.join(outDir, "title.txt"), `${story.video?.title || story.title}\n`, "utf8");
