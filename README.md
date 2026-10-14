@@ -2,7 +2,7 @@
 
 AI 驱动的 WebGAL 二创工作室。输入一句脑洞，Galcode 会和你讨论剧情、生成 story JSON、校验并编译成 WebGAL 工程，然后起一个本地预览服务器——在浏览器里直接看你的 MyGO / Ave Mujica 小剧场。
 
-现在的 Galcode 是一个以 [dsh](https://github.com/deepseek-ai/deepseek-harness)（DeepSeek Harness）为主体的终端应用：裸 `galcode` 启动一个 TUI 创作台，里面是带着 Galcode 人格、技能和全套工具的 AI 导演。旧的 Electron GUI、双击 exe 和录制视频技术栈已经移除（存档见文末）。
+现在的 Galcode 是一个以 [dsh](https://github.com/deepseek-ai/deepseek-harness)（DeepSeek Harness）为主体的终端应用：裸 `galcode` 启动一个 TUI 创作台，里面是带着 Galcode 人格、技能和全套工具的 AI 导演。视频录制已基于 Chromium（chrome-headless-shell + CDP）回归：`galcode record` 直接从 WebGAL 预览页面产出成片（旧的 Electron 方案存档见文末）。
 
 第一次使用建议先看新手手册：[小白看这里](docs/小白看这里.md)。
 
@@ -34,7 +34,7 @@ sudo apt install -y nodejs npm
 node --version
 ```
 
-只依赖云端大模型 API，不需要本地模型，不需要 GPU。ffmpeg 是可选项：Galcode 自身不再需要它，只有你自己的后期处理流程用到时再装。
+只依赖云端大模型 API，不需要本地模型，不需要 GPU。ffmpeg 仅在录制视频时是必需项（`galcode record`），不录制的话可以不用装。
 
 ### 2. 安装 Galcode
 
@@ -95,11 +95,11 @@ TUI 里的 agent 使用 `galcode` 预设：人格移植自旧版 writer/discuss/
 ## 环境自检与初始化
 
 ```bash
-galcode doctor    # 检查 Node、dsh、profile、WebGAL 引擎、Live2D runtime、ffmpeg
+galcode doctor    # 检查 Node、dsh、profile、WebGAL 引擎、Live2D runtime、ffmpeg、录制浏览器
 galcode setup     # 只初始化/修复 dsh profile（幂等，可重复运行）
 ```
 
-`doctor` 中 Live2D runtime 和 ffmpeg 是 WARN 级（缺了不影响核心流程），其余是必需项。
+`doctor` 中 Live2D runtime、ffmpeg 和录制浏览器是 WARN 级（缺了不影响核心流程），其余是必需项。
 
 ## 旧版 CLI（galcode cli）
 
@@ -113,12 +113,23 @@ TUI 之外，旧版命令行仍然完整保留，通过 `cli` 前缀进入（直
 | `galcode cli yolo --offline` | 不讨论直接生成；`--offline` 跑本地 demo，不需要 API key |
 | `galcode cli compile story.json --out outputs/x` | 把 story JSON 编译成 WebGAL 工程 |
 | `galcode cli preview outputs/x --port 3000` | 启动本地 WebGAL 预览服务器 |
+| `galcode cli record outputs/x --duration 60 --fps 30` | 录制成片（自动起预览、后期混 BGM，见下文「录制视频」） |
 | `galcode cli configure` | 配置旧版 CLI 用的 OpenAI 兼容接口（`OPENAI_*`，与 dsh 创作台互不影响） |
 | `galcode cli index` | 索引素材目录，生成 asset-manifest.json |
 | `galcode cli setup --root vendor` | 克隆 vendor 仓库（旧版语义的 setup） |
 | `galcode cli download-assets` | 用 curl 断点续传下载素材包，适合不稳定网络 |
 | `galcode cli install-live2d-runtime --from <dir>` | 安装 Live2D runtime 文件 |
 | `galcode cli prepare-live2d` | 解压可渲染的 Live2D 模型压缩包 |
+
+## 录制视频
+
+```bash
+galcode cli record outputs/<作品名> --duration 60 --fps 30 --out outputs/<作品名>/final.mp4
+```
+
+录制基于 pinned 的 chrome-headless-shell（Chrome for Testing 稳定版，首次录制时才下载到 `.galcode/browser/`，不会在 npm install 时下载；可用 `GALCODE_CHROME_DOWNLOAD_BASE_URL` 指定镜像源）。不给 `--url` 时会自动启动 WebGAL 预览再录制；`--duration` 缺省取编译出的故事时间线时长；录完自动把 `story.json` 里的 BGM 时间线混音进成片（对齐视频精确时长）。`make`/`yolo` 加 `--record` 可在编译后直接出片。
+
+模式：`--mode realtime`（默认， paced CDP 截图管线，与旧 Electron 录制行为对齐）；`--mode deterministic`（实验性，`HeadlessExperimental.beginFrame` 驱动虚拟帧时钟逐帧渲染）。旧的 `--capture electron|screenshot` 已被 `--mode realtime|deterministic` 取代。超时规则：`max(180s, duration*2+180s)`；ffmpeg 已写出文件时容忍非零退出（保留半成品）。需要 ffmpeg；浏览器完整性（二进制+资源文件清单）和能力探针（CDP `HeadlessExperimental.beginFrame`）在录制前自检，失败自动重新下载，`galcode doctor` 可查看状态。
 
 ## MCP 服务器
 
@@ -168,6 +179,7 @@ outputs/<作品名>/
 ├── asset-manifest.json    # 本次编译用的素材清单
 ├── title.txt / description.txt
 ├── preview.html           # 无引擎时的极简回退预览
+├── final.mp4              # `galcode record` 录制的成片（含 BGM 混音）
 ├── README.md              # 该作品的说明
 └── game/                  # WebGAL 工程
     ├── scene/start.txt
@@ -182,6 +194,7 @@ bin/galcode.js             入口分发：TUI / setup / doctor / cli 旧命令
 bin/galcode-mcp.js         MCP 服务器入口
 src/dsh-profile.mjs        dsh profile 初始化、启动、doctor
 src/galcode.js             旧版 CLI 核心
+src/recorder/              视频录制：浏览器运行时管理、帧采集（realtime/deterministic）、BGM 混音
 src/mcp/server.mjs         MCP 服务器实现
 packages/dsh-galcode/      dsh bundle：cordis.patch.yml、presets/、skills/
 scripts/galcode-bootstrap.mjs  跨平台安装器（下载 WebGAL 引擎等）
@@ -228,4 +241,4 @@ Live2D SDK runtime 文件（例如 `live2d.min.js`、`live2dcubismcore.min.js`�
 
 ## GUI 时代存档
 
-v0.1 时代的 Electron GUI、原生双击 launcher 和视频录制技术栈已经整体移除，完整代码存档在 [`legacy/v0.1-gui`](https://github.com/Huanuyn1/Galcode/tree/legacy/v0.1-gui) 分支。v0.2 起 Galcode 以 dsh TUI 为主体，浏览器预览取代本地录制出片；确定性渲染与录制回归在路线图（[ROADMAP.md](ROADMAP.md)）的 v0.3 里。
+v0.1 时代的 Electron GUI、原生双击 launcher 和 Electron 录制技术栈已经整体移除，完整代码存档在 [`legacy/v0.1-gui`](https://github.com/Huanuyn1/Galcode/tree/legacy/v0.1-gui) 分支。v0.2 起 Galcode 以 dsh TUI 为主体；视频录制随后基于 Chromium（chrome-headless-shell + CDP）重新回归，见上文「录制视频」与路线图（[ROADMAP.md](ROADMAP.md)）。

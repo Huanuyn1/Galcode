@@ -1,0 +1,138 @@
+import fs from "node:fs/promises";
+import fssync from "node:fs";
+import path from "node:path";
+import { killChildTree } from "../proc.mjs";
+import { ensureRecorderBrowser, launchRecorderBrowser, closeBrowserTree } from "./browser.mjs";
+import { assertFfmpegAvailable } from "./ffmpeg.mjs";
+import { recordRealtime } from "./realtime.mjs";
+import { recordDeterministic } from "./deterministic.mjs";
+import { mixBgm } from "./mix-bgm.mjs";
+
+// `galcode record` orchestration, ported from legacy recordProject (~:2841):
+// resolve the duration contract (--duration wins, else the compiled story
+// timeline), auto-start the WebGAL preview when no --url is given, record with
+// the pinned headless browser, post-mix BGM, and never leave a chromium/vite
+// process behind.
+//
+// Timeout rule (legacy): max(180s, duration*2 + 180s). On timeout the capture
+// loop stops and ffmpeg finalizes whatever it has — a partial valid video
+// beats a dead .mp4 without a moov atom.
+
+export async function readStoryDuration(projectDir) {
+  const storyPath = path.join(projectDir, "story.json");
+  if (!fssync.existsSync(storyPath)) return 0;
+  try {
+    const story = JSON.parse(await fs.readFile(storyPath, "utf8"));
+    // 优先使用编译时计算的真实时间线时长，AI 声明的 durationSec 仅供参考
+    return Number(story._totalDurationSec || story.durationSec || 0);
+  } catch {
+    return 0;
+  }
+}
+
+export function resolveRecordMode(flags = {}) {
+  const raw = String(flags.mode || (flags.deterministic ? "deterministic" : "realtime")).toLowerCase();
+  if (raw === "realtime" || raw === "deterministic") return raw;
+  throw new Error(`Unknown --mode: ${raw}. Use realtime or deterministic.`);
+}
+
+export function recordTimeoutMs(durationSec, flags = {}) {
+  return Number(flags.recordTimeout || Math.max(180000, durationSec * 2000 + 180000));
+}
+
+export async function recordProject(projectDir, flags = {}, deps = {}) {
+  const log = flags.quiet ? () => {} : (line) => console.log(line);
+  projectDir = path.resolve(projectDir);
+  if (!fssync.existsSync(path.join(projectDir, "game", "scene", "start.txt")) && !flags.url) {
+    throw new Error(`Not a compiled Galcode project: ${projectDir} (missing game/scene/start.txt — run \`galcode compile\` or \`galcode yolo\` first)`);
+  }
+
+  const durationSec = Number(flags.duration || flags.durationSec || await readStoryDuration(projectDir) || 180);
+  const out = path.resolve(flags.out || flags.videoOut || path.join(projectDir, "final.mp4"));
+  const width = Number(flags.width || 1280);
+  const height = Number(flags.height || 720);
+  const fps = Number(flags.fps || 60);
+  const mode = resolveRecordMode(flags);
+  const ffmpegCommand = String(flags.ffmpeg || "ffmpeg");
+
+  // ffmpeg is required-for-record: fail before touching the browser.
+  await assertFfmpegAvailable(ffmpegCommand);
+
+  let autoServer = null;
+  let url = flags.url || "";
+  if (!url) {
+    if (!deps.startWebGALPreview) throw new Error("No --url given and no WebGAL preview starter is available.");
+    autoServer = await deps.startWebGALPreview(projectDir, flags);
+    url = autoServer.url;
+  }
+
+  const { executablePath } = await ensureRecorderBrowser({ cacheDir: flags.browserCacheDir ? path.resolve(flags.browserCacheDir) : undefined, log });
+  await fs.mkdir(path.dirname(out), { recursive: true });
+  await fs.rm(out, { force: true });
+
+  const timeoutMs = recordTimeoutMs(durationSec, flags);
+  let timedOut = false;
+  let browser = null;
+
+  // Timeout + signal discipline: flip the stop flag so the capture loop ends
+  // gracefully (ffmpeg still finalizes a valid partial file); cleanup in
+  // finally tree-kills browser and preview server either way.
+  const timeoutTimer = setTimeout(() => {
+    timedOut = true;
+    log(`Recording timed out after ${Math.round(timeoutMs / 1000)}s; finalizing partial output…`);
+  }, timeoutMs);
+  timeoutTimer.unref?.();
+  const onSignal = (signal) => {
+    log(`Received ${signal}; stopping recording…`);
+    timedOut = true;
+  };
+  process.on("SIGINT", onSignal);
+  process.on("SIGTERM", onSignal);
+
+  let stats = null;
+  try {
+    log(`Recording ${width}x${height} @ ${fps} fps, ${durationSec}s, mode=${mode} → ${out}`);
+    browser = await launchRecorderBrowser({ executablePath, mode, width, height });
+    const recorder = mode === "deterministic" ? recordDeterministic : recordRealtime;
+    stats = await recorder({
+      browser,
+      url,
+      out,
+      width,
+      height,
+      fps,
+      durationSec,
+      ffmpeg: ffmpegCommand,
+      crf: flags.crf !== undefined ? Number(flags.crf) : 18,
+      startDelayMs: Number(flags.startDelay || 1500),
+      sceneDelayMs: Number(flags.sceneDelay || 8000),
+      autoAdvanceIntervalMs: flags.clickInterval ? Number(flags.clickInterval) : 4000,
+      noAutoplay: Boolean(flags.noAutoplay),
+      stopOnTitle: Boolean(flags.stopOnTitle),
+      shouldStop: () => timedOut,
+      log
+    });
+  } finally {
+    clearTimeout(timeoutTimer);
+    process.off("SIGINT", onSignal);
+    process.off("SIGTERM", onSignal);
+    await closeBrowserTree(browser);
+    if (autoServer?.child) killChildTree(autoServer.child);
+  }
+
+  const outStat = fssync.statSync(out, { throwIfNoEntry: false });
+  if (!outStat || outStat.size === 0) {
+    throw new Error(`Recording produced no output: ${out}`);
+  }
+
+  const mix = await mixBgm(projectDir, out, {
+    ffmpeg: ffmpegCommand,
+    noBgm: flags.noBgm,
+    log,
+    warn: (line) => console.warn(line)
+  });
+
+  log(`Recorded ${out} (${outStat.size} bytes${mix.mixed ? `, BGM mixed: ${mix.tracks} track(s)` : ""})`);
+  if (timedOut) log("Note: recording stopped early (timeout/signal); the output is a valid partial recording.");
+  return { out, durationSec, mode, ...stats, bgm: mix };
+}

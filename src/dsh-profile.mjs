@@ -5,6 +5,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { recorderBrowserStatus } from "./recorder/browser.mjs";
 
 // dsh (DeepSeek Harness) integration for the Galcode launcher: DSH_HOME
 // resolution, idempotent `galcode` profile setup, dsh process spawning, and
@@ -295,7 +296,10 @@ export async function doctorDsh(options = {}) {
   push("Live2D runtime", live2dMissing.length === 0 ? live2dLib : `missing ${live2dMissing.join(", ")} (Live2D disabled; see skill live2d-licensing)`, live2dMissing.length === 0, true);
 
   const ffmpeg = await probeCommand("ffmpeg", ["-version"]);
-  push("ffmpeg (advisory)", ffmpeg || "not found — only needed for external post-processing", Boolean(ffmpeg), true);
+  push("ffmpeg (required for `galcode record`)", ffmpeg || "not found — recording unavailable; install ffmpeg", Boolean(ffmpeg), true);
+
+  const recorderBrowser = await recorderBrowserStatus();
+  push("Recorder browser (chrome-headless-shell)", recorderBrowser.detail, recorderBrowser.ok, true);
 
   console.log("Galcode Doctor");
   console.log(`Root: ${PACKAGE_ROOT}`);

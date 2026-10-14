@@ -9,6 +9,7 @@ import { stdin as input, stdout as output } from "node:process";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { killChildTree } from "./proc.mjs";
+import { recordProject } from "./recorder/index.mjs";
 
 // Cross-platform helpers.  Code is shared across macOS / Linux / Windows;
 // only the launcher scripts (galcode / galcode.bat) and README differ.
@@ -243,8 +244,8 @@ const DEFAULT_WRITER_PROMPT = [
   "",
   "=== BGM / 背景音乐 ===",
   "配乐的主方式是在每个场景设置 bgmAssetId（编译为 WebGAL 的 bgm 指令，由引擎播放）。",
-  "此外可在故事根级添加可选的 'bgm' 数组：编译时会把对应音频文件复制到 game/bgm/ 目录，供引擎播放使用。",
-  "不存在后期视频混音步骤；startSec/endSec/volume/fadeIn/fadeOut 只作为时间线信息随 story.json 保存。",
+  "此外可在故事根级添加可选的 'bgm' 数组：编译时会把对应音频文件复制到 game/bgm/ 目录；",
+  "录制成片时会按这个时间线把 BGM 后期混音进视频（裁剪/淡入淡出/音量/混音，对齐视频时长）。",
   "每条 BGM 条目格式：{ assetName:'文件名.mp3', startSec:0, endSec:180, volume:0.25, fadeIn:2, fadeOut:3 }",
   "- assetName：素材清单中 BGM 列表里的文件名（如 's_Title.mp3'），或 figure/bgm/ 目录下的实际文件名",
   "不提供 bgm 数组则只使用场景级 bgmAssetId 配乐。",
@@ -354,6 +355,7 @@ export async function main(argv) {
   if (command === "make") return makeCommand(flags);
   if (command === "compile") return compileCommand(flags, positionals);
   if (command === "preview") return previewCommand(flags, positionals);
+  if (command === "record") return recordCommand(flags, positionals);
 
   throw new Error(`Unknown command: ${command}`);
 }
@@ -416,6 +418,7 @@ Usage:
   galcode make --mode yolo --theme "灯和爱音雨夜和解" --duration 180
   galcode compile story.json --assets work/asset-manifest.json --out outputs/story
   galcode preview outputs/story --port 3000
+  galcode record outputs/story --duration 180 --fps 30
 
 Modes:
   agent     Interactive AI director. Chat, brainstorm, generate, compile.
@@ -426,6 +429,21 @@ AI environment:
   OPENAI_API_KEY       Required for real AI generation, or run galcode configure.
   OPENAI_MODEL         Defaults to gpt-4.1-mini.
   OPENAI_BASE_URL      Defaults to https://api.openai.com/v1.
+
+Recording:
+  galcode record <projectDir> [--out final.mp4] [--duration 180] [--fps 30]
+                 [--width 1280] [--height 720] [--url http://localhost:3000]
+                 [--mode realtime|deterministic] [--deterministic] [--no-bgm]
+  Requires ffmpeg. Records the WebGAL preview with a pinned chrome-headless-shell
+  (downloaded into .galcode/browser on first use, never at npm install time).
+  If no --url is provided, Galcode auto-starts the local WebGAL preview and
+  records that page. --duration defaults to the compiled story timeline; add
+  --record to make/yolo flows to record right after compiling. BGM from
+  story.json is mixed in afterwards (atrim/afade/volume/amix, exact duration).
+  --mode realtime (default) captures paced JPEG frames over CDP;
+  --mode deterministic (experimental) drives HeadlessExperimental.beginFrame so
+  rAF/PIXI follow a virtual frame clock. Timeout: max(180s, duration*2+180s);
+  a partial recording is kept if ffmpeg already wrote output.
 
 Preview:
   galcode preview <projectDir> [--port N] [--host 127.0.0.1]
@@ -1137,6 +1155,10 @@ async function createProjectFromBrief({ brief, mode, flags, outDir }) {
   await writeJson(storyPath, story);
   await compileStory(story, manifest, outDir, flags);
 
+  if (flags.record) {
+    await recordProject(outDir, flags, { startWebGALPreview });
+  }
+
   console.log(`Galcode project ready: ${outDir}`);
   console.log(`Preview it with: galcode preview ${outDir}`);
   return { outDir, storyPath, manifestPath };
@@ -1180,6 +1202,11 @@ async function compileCommand(flags, positionals) {
   manifest = await prepareLive2DAssets(manifest, flags, { theme: story.title, characters: (story.characters || []).join(" ") });
   await compileStory(story, manifest, outDir, flags);
   console.log(`Compiled WebGAL project: ${outDir}`);
+}
+
+async function recordCommand(flags, positionals) {
+  const projectDir = path.resolve(positionals[0] || flags.project || ".");
+  await recordProject(projectDir, flags, { startWebGALPreview });
 }
 
 async function askCreativeBrief(flags) {
@@ -2826,6 +2853,12 @@ To preview this project in the WebGAL engine:
 
 \`\`\`bash
 galcode preview ${outDir}
+\`\`\`
+
+To record it to a video (auto-starts the WebGAL preview when no --url is given):
+
+\`\`\`bash
+galcode record ${outDir} --fps 30
 \`\`\`
 `;
   await fs.writeFile(path.join(outDir, "README.md"), readme, "utf8");
