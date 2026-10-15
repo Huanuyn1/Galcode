@@ -1367,7 +1367,7 @@ function storySchema() {
         backgroundAssetId: "asset id from manifest, optional",
         bgmAssetId: "asset id from manifest, optional",
         actions: [
-          { type: "figure", character: "string", assetId: "asset id from manifest, may be figure or live2d", position: "left|center|right", motion: "Live2D motion name (REQUIRED; chara pack: native like mtn_smile01_C, or cross-character like A05_素世/mtn_smile01_C)", expression: "Live2D expression name (REQUIRED; chara pack: native like exp_smile01, or cross-character like A05_素世/exp_smile01)" },
+          { type: "figure", character: "string", assetId: "asset id from manifest, may be figure or live2d", position: "left|center|right", motion: "Live2D motion name (REQUIRED; chara pack: native like mtn_smile01_C, or cross-character like A05_素世/mtn_smile01_C)", expression: "Live2D expression name (REQUIRED; chara pack: native like exp_smile01, or cross-character like A05_素世/exp_smile01)", transform: "OPTIONAL framing override { x, y, scale }; default is bust shot (scale 1.9) — omit unless the scene needs a different composition" },
           { type: "line", speaker: "string", text: "string", durationSec: "number" },
           { type: "narration", text: "string", durationSec: "number" },
           { type: "wait", durationSec: "number" }
@@ -2407,8 +2407,9 @@ async function compileAction(action, assetMap, gameDir, copied) {
     const motionArg = motion ? ` -motion=${escapeCommandValue(motion)}` : "";
     const expressionArg = expression ? ` -expression=${escapeCommandValue(expression)}` : "";
     const idArg = asset?.kind === "live2d" ? ` -id=${figureId(action.position)}` : "";
+    const transformArg = figureTransformArg(action, asset);
     const space = pos ? " " : "";
-    return `changeFigure:${escapeCommandValue(name)}${space}${pos}${idArg}${motionArg}${expressionArg} -next;`.replace(/  +/g, ' ');
+    return `changeFigure:${escapeCommandValue(name)}${space}${pos}${idArg}${motionArg}${expressionArg}${transformArg} -next;`.replace(/  +/g, ' ');
   }
   if (action.type === "line") {
     const speaker = cleanText(action.speaker || "");
@@ -2508,6 +2509,43 @@ async function copyAssetForWebGAL(asset, gameDir, subdir, copied) {
 
 function isCharaLive2DAsset(asset) {
   return asset?.kind === "live2d" && (asset.pack === "chara" || isCharaPackModel(asset.path || ""));
+}
+
+// Bust-shot default framing for chara (Cubism 5) Live2D figures, tuned
+// visually on webgal-mygo's 2560x1440 stage (M_3_1_0 positioning): scale 1.9
+// crops at mid-thigh (no calves), y=505 keeps heads inside with headroom,
+// x=±200 keeps two-shots symmetric with nothing clipped at the frame edges.
+// Follows the pack's own idiom (figure/chara/name.md §5: scale ~2, y ~500-556,
+// x ±~250) pulled slightly inward. Old packs keep the engine default — their
+// native scale differs.
+const CHARA_BUST_TRANSFORM = {
+  left: { position: { x: -200, y: 505 }, scale: { x: 1.9, y: 1.9 } },
+  center: { position: { x: 0, y: 505 }, scale: { x: 1.9, y: 1.9 } },
+  right: { position: { x: 200, y: 505 }, scale: { x: 1.9, y: 1.9 } }
+};
+
+// -transform arg for live2d figure actions: chara models get the bust-shot
+// default; an explicit story-level action.transform overrides it (either
+// shorthand { x, y, scale } or the raw engine frame { position:{x,y},
+// scale:{x,y} }). Other assets: no transform (engine default framing).
+function figureTransformArg(action, asset) {
+  if (asset?.kind !== "live2d") return "";
+  let transform = null;
+  const custom = action.transform;
+  if (custom && typeof custom === "object") {
+    const pos = custom.position && typeof custom.position === "object"
+      ? custom.position
+      : { x: Number(custom.x ?? 0), y: Number(custom.y ?? 505) };
+    const scaleRaw = custom.scale;
+    const scale = scaleRaw && typeof scaleRaw === "object"
+      ? { x: Number(scaleRaw.x ?? 1.9), y: Number(scaleRaw.y ?? scaleRaw.x ?? 1.9) }
+      : { x: Number(scaleRaw ?? 1.9), y: Number(scaleRaw ?? 1.9) };
+    transform = { position: { x: Number(pos.x || 0), y: Number(pos.y || 0) }, scale };
+  } else if (isCharaLive2DAsset(asset)) {
+    transform = CHARA_BUST_TRANSFORM[action.position || "center"] || CHARA_BUST_TRANSFORM.center;
+  }
+  if (!transform) return "";
+  return ` -transform=${JSON.stringify(transform)}`;
 }
 
 async function copyLive2DForWebGAL(asset, gameDir, copied) {

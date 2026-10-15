@@ -188,15 +188,17 @@ describe("chara pack compile", () => {
     await runCli(["cli", "compile", STORY_PATH, "--manifest", MANIFEST_PATH, "--out", OUT_DIR, "--no-theme"]);
 
     const script = readFileSync(path.join(OUT_DIR, "game", "scene", "start.txt"), "utf8");
+    // chara figures additionally carry the default bust-shot transform
+    const bust = ` -transform={"position":{"x":0,"y":505},"scale":{"x":1.9,"y":1.9}}`;
     expect(script).toContain(
-      `changeFigure:${ANON_MODEL_REL} -id=fig-center -motion=mtn_idle01_C -expression=A05_素世/exp_smile01 -next;`);
+      `changeFigure:${ANON_MODEL_REL} -id=fig-center -motion=mtn_idle01_C -expression=A05_素世/exp_smile01${bust} -next;`);
     expect(script).toContain(
-      `changeFigure:${ANON_MODEL_REL} -id=fig-center -motion=A03_乐奈/mtn_check01_L -expression=exp_smile01 -next;`);
+      `changeFigure:${ANON_MODEL_REL} -id=fig-center -motion=A03_乐奈/mtn_check01_L -expression=exp_smile01${bust} -next;`);
     // chara 名字不做旧包的 anon_ 式前缀转换
     expect(script).not.toContain("anon_mtn_");
     expect(script).not.toContain("anon_exp_");
 
-    // 旧 mygo 包回归:hashed live2d/ 路径 + 角色前缀转换保持不变
+    // 旧 mygo 包回归:hashed live2d/ 路径 + 角色前缀转换保持不变,且不带 transform(旧包维持引擎默认取景)
     expect(script).toMatch(/changeFigure:live2d\/\S*model\.json -left -id=fig-left -motion=tomori_idle01 -expression=tomori_default -next;/);
 
     // 编译产物的目录结构:原样保留 chara/<角色>/<服装>/,并复制共享库

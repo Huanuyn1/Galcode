@@ -198,7 +198,8 @@ const STORY_SCHEMA = {
           assetId: "asset id from manifest, required unless character is none",
           position: "left|center|right",
           motion: "Live2D motion name, required for Live2D assets. chara pack: native name like mtn_smile01_C, or cross-character 前缀_角色/名 like A05_素世/mtn_smile01_C",
-          expression: "Live2D expression name, required for Live2D assets. chara pack: native name like exp_smile01, or cross-character like A05_素世/exp_smile01"
+          expression: "Live2D expression name, required for Live2D assets. chara pack: native name like exp_smile01, or cross-character like A05_素世/exp_smile01",
+          transform: "optional framing override for Live2D figures: { x, y, scale } (stage px from center; default bust shot is scale 1.9, y 505, x ∓200 by position)"
         },
         { type: "line", speaker: "string", text: "string", durationSec: "number" },
         { type: "narration", text: "string", durationSec: "number" },
@@ -1066,6 +1067,14 @@ export function validateStory(story, manifest) {
       }
       if (action.type === "figure") {
         if (!positions.has(action.position)) errors.push(`${label}.position must be left, center, or right.`);
+        if (action.transform !== undefined) {
+          const t = action.transform;
+          const shorthand = t && typeof t === "object" && ("x" in t || "y" in t || "scale" in t);
+          const rawFrame = t && typeof t === "object" && t.position && typeof t.position === "object";
+          if (!shorthand && !rawFrame) {
+            errors.push(`${label}.transform must be an object like { x: -200, y: 505, scale: 1.9 } or { position: { x, y }, scale: { x, y } }.`);
+          }
+        }
         if (String(action.character || "").toLowerCase() === "none") {
           occupied.delete(action.position);
           continue;

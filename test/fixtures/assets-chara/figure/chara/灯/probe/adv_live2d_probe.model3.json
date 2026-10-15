@@ -1,0 +1,14 @@
+{
+  "Version": 3,
+  "FileReferences": {
+    "Moc": "probe.moc3",
+    "Textures": [],
+    "Motions": {
+      "mtn_idle01_C": [{ "File": "motions/mtn_idle01_C.motion3.json" }],
+      "mtn_smile01_C": [{ "File": "motions/mtn_smile01_C.motion3.json" }]
+    },
+    "Expressions": [
+      { "Name": "exp_idle01", "File": "expressions/exp_idle01.exp.json" }
+    ]
+  }
+}
