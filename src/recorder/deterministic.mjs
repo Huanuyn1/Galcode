@@ -43,6 +43,7 @@ export async function recordDeterministic({
   sceneDelayMs = 8000,
   autoAdvanceSec = 4,
   requiredMocVersion = 0,
+  stopOnTitle = false,
   shouldStop = () => false,
   log = () => {}
 } = {}) {
@@ -174,12 +175,13 @@ export async function recordDeterministic({
     let frames = 0;
     let duplicated = 0;
     let lastBuffer = null;
+    let stoppedOnTitle = false;
     const started = Date.now();
     try {
       // Loop on written frames (not pumps): a beginFrame that returns no
       // screenshot is re-pumped so the output keeps the exact frame count.
       let guard = totalFrames * 3;
-      while (frames < totalFrames && !shouldStop() && guard > 0) {
+      while (frames < totalFrames && !shouldStop() && !stoppedOnTitle && guard > 0) {
         guard -= 1;
         const result = await pumpFrame(true);
         if (result?.screenshotData) {
@@ -191,6 +193,17 @@ export async function recordDeterministic({
         }
         await writeFrame(encoder, lastBuffer);
         frames += 1;
+
+        // Title-screen watchdog (ported from realtime mode): after the first
+        // 10 virtual seconds, check once per virtual second; with
+        // --stop-on-title a re-appearing title screen ends the recording
+        // cleanly at the story end instead of overshooting into the menu.
+        if (stopOnTitle && frames % Math.max(1, Math.round(fps)) === 0 && frames * frameMs > 10000) {
+          if (await isTitleVisible(page)) {
+            stoppedOnTitle = true;
+            log(`Title screen detected at ${(frames * frameMs / 1000).toFixed(1)}s virtual; stopping early (--stop-on-title)`);
+          }
+        }
       }
     } catch (error) {
       abortEncoder(encoder);
@@ -203,7 +216,7 @@ export async function recordDeterministic({
     const wallSec = Math.max(0.001, (Date.now() - started) / 1000);
     log(`Deterministic: captured ${frames}/${totalFrames} frames (${duplicated} duplicated) in ${wallSec.toFixed(2)}s wall time; virtual advances: ${finalClock?.advances ?? "?"}`);
     if (result.partial) log(`ffmpeg exited with ${result.exitCode} but the output video exists — keeping it (partial success)`);
-    return { frames, duplicatedFrames: duplicated, wallSec, effectiveFps: frames / wallSec, bytes: result.bytes, partial: result.partial, virtualAdvances: finalClock?.advances };
+    return { frames, duplicatedFrames: duplicated, wallSec, effectiveFps: frames / wallSec, bytes: result.bytes, partial: result.partial, virtualAdvances: finalClock?.advances, stoppedOnTitle };
   } catch (error) {
     await page.close().catch(() => {});
     throw error;
