@@ -13,10 +13,13 @@ import { live2dCoreMismatchWarning } from "../live2d-compat.mjs";
 
 // Deterministic mode (experimental, --deterministic): chrome-headless-shell is
 // launched with --enable-begin-frame-control et al., so the compositor only
-// produces frames when we issue HeadlessExperimental.beginFrame. Each pumped
-// frame advances rAF/PIXI by exactly 1/fps on the virtual frame clock; capture
-// is the screenshot the beginFrame call hands back. <audio>/<video> stay
-// frozen under this clock — fine, the soundtrack is post-mixed anyway.
+// produces frames when we issue HeadlessExperimental.beginFrame. beginFrame
+// alone does NOT virtualize the page's clocks (measured on 155: rAF timestamp,
+// performance.now, Date.now, DOM timers all stay on the wall clock), so
+// installVirtualClock unifies them on the frame counter — every pumped frame
+// advances all of them by exactly 1/fps. Capture is the screenshot the
+// beginFrame call hands back. <audio>/<video> stay frozen — fine, the
+// soundtrack is post-mixed anyway.
 //
 // Dialogue advance is driven from OUTSIDE on the same clock: a rAF-counting
 // advancer injects Space every N frames (see startVirtualAutoAdvance).

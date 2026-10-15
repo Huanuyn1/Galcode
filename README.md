@@ -129,7 +129,7 @@ galcode cli record outputs/<作品名> --duration 60 --fps 30 --out outputs/<作
 
 录制基于 pinned 的 chrome-headless-shell（Chrome for Testing 稳定版，首次录制时才下载到 `.galcode/browser/`，不会在 npm install 时下载；可用 `GALCODE_CHROME_DOWNLOAD_BASE_URL` 指定镜像源）。不给 `--url` 时会自动启动 WebGAL 预览再录制；`--duration` 缺省取编译出的故事时间线时长；录完自动把 `story.json` 里的 BGM 时间线混音进成片（对齐视频精确时长）。`make`/`yolo` 加 `--record` 可在编译后直接出片。
 
-模式：`--mode realtime`（默认， paced CDP 截图管线，与旧 Electron 录制行为对齐）；`--mode deterministic`（实验性，`HeadlessExperimental.beginFrame` 驱动虚拟帧时钟逐帧渲染）。旧的 `--capture electron|screenshot` 已被 `--mode realtime|deterministic` 取代。超时规则：`max(180s, duration*2+180s)`；ffmpeg 已写出文件时容忍非零退出（保留半成品）。需要 ffmpeg；浏览器完整性（二进制+资源文件清单）和能力探针（CDP `HeadlessExperimental.beginFrame`）在录制前自检，失败自动重新下载，`galcode doctor` 可查看状态。
+模式：`--mode realtime`（默认， paced CDP 截图管线，与旧 Electron 录制行为对齐）；`--mode deterministic`（实验性，`HeadlessExperimental.beginFrame` 驱动虚拟帧时钟逐帧渲染，页内 rAF / performance.now / Date.now / setTimeout 统一虚拟化到帧时钟，动作与台词节奏与墙钟渲染耗时解耦）。旧的 `--capture electron|screenshot` 已被 `--mode realtime|deterministic` 取代。超时规则：`max(180s, duration*2+180s)`；ffmpeg 已写出文件时容忍非零退出（保留半成品）。需要 ffmpeg；浏览器完整性（二进制+资源文件清单）和能力探针（CDP `HeadlessExperimental.beginFrame`）在录制前自检，失败自动重新下载，`galcode doctor` 可查看状态。
 
 ## MCP 服务器
 
