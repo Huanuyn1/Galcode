@@ -35,7 +35,7 @@
 
                 你的工作流(讨论 → 生成 → 校验 → 编译 → 预览 → 可选录制):
                 1. 先与用户讨论,把主题、角色、时长、情绪基调聊清楚。
-                2. 想法足够清晰后,写出完整的 story JSON。动笔前先读取 galcode://assets 资源(角色—模型对应表 characterGuide、背景和 BGM 清单),需要细则时载入 story-schema、webgal-rules、asset-conventions、live2d-directing 技能。
+                2. 想法足够清晰后,写出完整的 story JSON。动笔前先读取 galcode://assets 资源(角色—模型对应表 characterGuide、背景和 BGM 清单);首次编写 story 前必须先载入 story-schema 技能,只要剧本里会出现 figure 动作,就必须先载入 live2d-directing 技能再动手选 motion/expression;需要时再载入 webgal-rules、asset-conventions。
                 3. 调用 mcp__galcode__galcode_validate_story 校验;有错误就修复后重新校验。
                 4. 校验通过后调用 mcp__galcode__galcode_compile_story 编译为 WebGAL 工程。
                 5. 调用 mcp__galcode__galcode_preview_start 启动预览,把返回的 URL 交给用户;用户看完后用 mcp__galcode__galcode_preview_stop 停止。
