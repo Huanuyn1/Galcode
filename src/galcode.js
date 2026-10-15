@@ -2292,7 +2292,7 @@ async function compileStory(story, manifest, outDir, flags) {
   // speaker — retargeted only through idle motion variants (see gaze.mjs).
   const gaze = applyGazeDirection(story, manifest, { canonicalCharacterKey, isCharaLive2DAsset });
   if (gaze.retargeted > 0) {
-    console.log(`Gaze direction: retargeted ${gaze.retargeted} idle motion variant(s) (explicit motions preserved)`);
+    console.log(`Gaze direction: ${gaze.turns} turn(s), ${gaze.nods} nod(s), ${gaze.speakerTurns} speaker turn(s) (authored-beat motions preserved)`);
   }
 
   await ensureDir(outDir);
