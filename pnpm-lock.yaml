@@ -166,9 +166,6 @@ importers:
 
   .:
     dependencies:
-      '@deepseek-ai/dsh':
-        specifier: 0.2.0-rc.2
-        version: 0.2.0-rc.2(2d03925acd3ffc991faf19f6064fc656)
       '@puppeteer/browsers':
         specifier: ^3.2.3
         version: 3.2.3
@@ -179,6 +176,9 @@ importers:
         specifier: ^25.12.0
         version: 25.12.0
     devDependencies:
+      '@deepseek-ai/dsh':
+        specifier: 0.2.0-rc.2
+        version: 0.2.0-rc.2(2d03925acd3ffc991faf19f6064fc656)
       vitest:
         specifier: ^5.0.3
         version: 5.0.3(@opentelemetry/api@1.9.1)(@types/node@26.6.4)(vite@8.3.2(@types/node@26.6.4)(yaml@2.9.1))
