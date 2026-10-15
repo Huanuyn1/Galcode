@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs/promises";
-import { execFileSync } from "node:child_process";
+import fssync from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
@@ -43,13 +43,28 @@ async function prerequisites() {
   return status;
 }
 
-function leftoverRecorderProcesses() {
+// Browser tests may run concurrently in separate vitest workers (same binary
+// path), so global pgrep would false-positive on a sibling test's browser.
+// Scope leak detection to THIS browser's process group (chrome leads its own
+// group when launched detached on POSIX).
+function groupMembers(pgid) {
+  const members = [];
+  let entries = [];
   try {
-    const out = execFileSync("pgrep", ["-f", "galcode/browser/chrome-headless-shell"], { encoding: "utf8" });
-    return out.trim().split(/\s+/).filter(Boolean);
+    entries = fssync.readdirSync("/proc");
   } catch {
-    return []; // pgrep exits 1 when nothing matches
+    return members;
   }
+  for (const entry of entries) {
+    if (!/^\d+$/.test(entry)) continue;
+    try {
+      const stat = fssync.readFileSync(`/proc/${entry}/stat`, "utf8");
+      // /proc/<pid>/stat: pid (comm) state ppid pgrp — comm may contain spaces
+      const afterComm = stat.slice(stat.lastIndexOf(")") + 1).trim().split(/\s+/);
+      if (Number(afterComm[2]) === pgid) members.push(Number(entry));
+    } catch { /* process vanished mid-read */ }
+  }
+  return members;
 }
 
 function pidAlive(pid) {
@@ -71,9 +86,7 @@ afterEach(async () => {
 describe("recorder process hygiene (real browser)", () => {
   it("leaves no chromium processes after a clean recording", async (t) => {
     if (!(await prerequisites())) return t.skip("pinned browser not installed/probed or ffmpeg missing — run `galcode record` once first");
-    expect(leftoverRecorderProcesses()).toEqual([]);
 
-    const status = await recorderBrowserStatus();
     const manifest = JSON.parse(await fs.readFile(path.join(recorderCacheDir(), "manifest.json"), "utf8"));
     const executablePath = path.join(recorderCacheDir(), manifest.executablePath);
     const browser = await launchRecorderBrowser({ executablePath, mode: "realtime", width: 320, height: 180 });
@@ -100,7 +113,7 @@ describe("recorder process hygiene (real browser)", () => {
     await new Promise((resolve) => setTimeout(resolve, 500));
     expect(pidAlive(pid)).toBe(false);
     expect(groupAlive(pid)).toBe(false);
-    expect(leftoverRecorderProcesses()).toEqual([]);
+    expect(groupMembers(pid)).toEqual([]);
   }, 90000);
 
   it("leaves no chromium processes and a valid partial file when aborted mid-run", async (t) => {
@@ -136,6 +149,6 @@ describe("recorder process hygiene (real browser)", () => {
     await new Promise((resolve) => setTimeout(resolve, 500));
     expect(pidAlive(pid)).toBe(false);
     expect(groupAlive(pid)).toBe(false);
-    expect(leftoverRecorderProcesses()).toEqual([]);
+    expect(groupMembers(pid)).toEqual([]);
   }, 90000);
 });
