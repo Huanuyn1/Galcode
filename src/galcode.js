@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { killChildTree } from "./proc.mjs";
 import { recordProject } from "./recorder/index.mjs";
 import { checkLive2DCompat } from "./live2d-compat.mjs";
+import { applyGazeDirection } from "./gaze.mjs";
 
 // Cross-platform helpers.  Code is shared across macOS / Linux / Windows;
 // only the launcher scripts (galcode / galcode.bat) and README differ.
@@ -2285,6 +2286,14 @@ async function compileStory(story, manifest, outDir, flags) {
   // Always repair character assets: maps display names to canonical keys
   // and replaces any stale asset IDs with the best available match.
   repairStoryCharacterAssets(story, manifest);
+
+  // Gaze/direction pass: unless the story choreographs it explicitly, the
+  // speaker faces the audience (C) and other on-stage figures face the
+  // speaker — retargeted only through idle motion variants (see gaze.mjs).
+  const gaze = applyGazeDirection(story, manifest, { canonicalCharacterKey, isCharaLive2DAsset });
+  if (gaze.retargeted > 0) {
+    console.log(`Gaze direction: retargeted ${gaze.retargeted} idle motion variant(s) (explicit motions preserved)`);
+  }
 
   await ensureDir(outDir);
   const gameDir = path.join(outDir, "game");
