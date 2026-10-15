@@ -87,9 +87,12 @@ afterAll(() => {
 describe("explicit figure removals survive compile (swap flicker fix)", () => {
   it("emits changeFigure:none for removals and never re-enters the removed character", () => {
     const scene2 = script.split("; Scene: s2")[1] || "";
+    // both removal forms: positional (static figures) + free-figure id
     expect(scene2).toContain("changeFigure:none -left -next;");
+    expect(scene2).toContain("changeFigure:none -id=gal-left -next;");
+    expect(scene2).toContain("changeFigure:none -id=gal-center -next;");
     expect(scene2).not.toContain("changeFigure:chara/爱音/");
-    expect(scene2).toContain("changeFigure:chara/灯/probe/adv_live2d_probe.model3.json -right -id=fig-right");
+    expect(scene2).toContain("changeFigure:chara/灯/probe/adv_live2d_probe.model3.json -right -id=gal-right");
   });
 
   it("still re-enters when the story actually wants the character back with a real assetId", () => {

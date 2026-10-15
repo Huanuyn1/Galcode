@@ -76,8 +76,8 @@ afterAll(() => {
 
 describe("Live2D bust-shot default transform", () => {
   it("emits scale 1.9 / y 505 / x ∓200 for chara figures by position", () => {
-    expect(script).toContain('changeFigure:chara/灯/probe/adv_live2d_probe.model3.json -left -id=fig-left -motion=mtn_idle01_C -expression=exp_idle01 -transform={"position":{"x":-200,"y":505},"scale":{"x":1.9,"y":1.9}} -next;');
-    expect(script).toContain('-right -id=fig-right -motion=mtn_smile01_C -expression=exp_idle01 -transform={"position":{"x":200,"y":505},"scale":{"x":1.9,"y":1.9}} -next;');
+    expect(script).toContain('changeFigure:chara/灯/probe/adv_live2d_probe.model3.json -left -id=gal-left -motion=mtn_idle01_C -expression=exp_idle01 -transform={"position":{"x":-200,"y":505},"scale":{"x":1.9,"y":1.9}} -next;');
+    expect(script).toContain('-right -id=gal-right -motion=mtn_smile01_C -expression=exp_idle01 -transform={"position":{"x":200,"y":505},"scale":{"x":1.9,"y":1.9}} -next;');
   });
 
   it("honors an explicit action.transform override", () => {

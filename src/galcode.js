@@ -2305,11 +2305,17 @@ async function compileStory(story, manifest, outDir, flags) {
     sceneText.push("");
     sceneText.push(`; Scene: ${scene.title}`);
 
-    // Clear all figure positions from previous scene
+    // Clear all figure positions from previous scene. Two forms per slot:
+    // positional `changeFigure:none -left` clears static-figure state
+    // (figNameLeft), while `-id=gal-left` clears our free figures (id'd
+    // live2d entries register under freeFigure[gal-left]; see figureId).
     if (!firstScene) {
       sceneText.push("changeFigure:none -left -next;");
+      sceneText.push("changeFigure:none -left -id=gal-left -next;");
       sceneText.push("changeFigure:none -right -next;");
+      sceneText.push("changeFigure:none -right -id=gal-right -next;");
       sceneText.push("changeFigure:none -next;");
+      sceneText.push("changeFigure:none -id=gal-center -next;");
     }
     firstScene = false;
 
@@ -2394,7 +2400,11 @@ async function compileAction(action, assetMap, gameDir, copied) {
     // 移除角色：character 或 assetId 为 "none"
     if (!action.character || action.character === "none" || action.assetId === "none") {
       const pos = positionFlag(action.position);
-      return `changeFigure:none${pos ? " " + pos : ""} -next;`.replace(/  +/g, " ");
+      // 两种移除形式都发：位置态(静态立绘) + 自由立绘 id(live2d 的 -id=fig-* 约定),
+      // 否则 id 立绘会残留在场上(见上方场景清场注释)。
+      const posArg = pos ? " " + pos : "";
+      const idArg = ` -id=${figureId(action.position)}`;
+      return `changeFigure:none${posArg} -next;\nchangeFigure:none${idArg} -next;`.replace(/  +/g, " ");
     }
     const asset = assetMap.get(action.assetId);
     const isCharaPack = asset?.kind === "live2d" && isCharaLive2DAsset(asset);
@@ -2496,8 +2506,14 @@ function positionFlag(position) {
 }
 
 function figureId(position) {
-  // .jsonl aggregate model lookup needs -id to match motion/expression state
-  return position === "left" ? "fig-left" : position === "right" ? "fig-right" : "fig-center";
+  // Free-figure ids for our live2d entries. Deliberately NOT fig-left/
+  // fig-center/fig-right: the engine exempts those keys from its
+  // not-in-state purge (useSetFigure), which makes `changeFigure:none
+  // -id=fig-left` a permanent no-op — the old cast then lingers through the
+  // next scene (rotation flicker). gal-* keys are purge-eligible, so
+  // `changeFigure:none -id=gal-left` actually removes the figure.
+  // (.jsonl aggregate model lookup needs -id to match motion/expression state.)
+  return position === "left" ? "gal-left" : position === "right" ? "gal-right" : "gal-center";
 }
 
 async function copyAssetForWebGAL(asset, gameDir, subdir, copied) {
