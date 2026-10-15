@@ -242,3 +242,81 @@ export async function probePageCubismCore(page) {
     }
   }).catch(() => null);
 }
+
+// Unified virtual clock for deterministic (beginFrame) mode.
+//
+// Measured on chrome-headless-shell 155: HeadlessExperimental.beginFrame
+// controls WHEN rAF fires (one callback per frame), but the rAF timestamp,
+// performance.now, Date.now and DOM timers all stay on the WALL clock. Under
+// software rendering a frame takes far longer than 1/fps wall time, so
+// wall-clocked animation (PIXI ticker's rAF-timestamp deltaMS; pixi-live2d-
+// display's performance.now motion/fade stamps) plays several times too fast.
+// Emulation.setVirtualTimePolicy was probed too: it virtualizes
+// performance.now/Date.now/timers but NOT the rAF timestamp — still broken.
+//
+// So deterministic mode owns the clock in-page: one rAF hook (installed before
+// any page script, re-registered first each frame) counts frames; every frame
+// advances the virtual clock by exactly frameMs, and rAF timestamps /
+// performance.now / Date.now / setTimeout / setInterval all read from it.
+export async function installVirtualClock(page, frameMs) {
+  await page.evaluateOnNewDocument((frameMs) => {
+    const realPerformanceNow = performance.now.bind(performance);
+    const realDateNow = Date.now.bind(Date);
+    const realRaf = window.requestAnimationFrame.bind(window);
+    const realCancelRaf = window.cancelAnimationFrame?.bind(window);
+    const perfBase = realPerformanceNow();
+    const dateBase = realDateNow();
+
+    let frames = 0;
+    let virtualMs = 0;
+    let nextTimerId = 1;
+    const timers = new Map();
+
+    performance.now = () => perfBase + virtualMs;
+    Date.now = () => dateBase + virtualMs;
+    window.__galcodeVirtualNow = () => virtualMs;
+
+    // rAF still fires once per beginFrame; only the timestamp argument is
+    // replaced with the virtual frame time.
+    window.requestAnimationFrame = (callback) => realRaf(() => callback(perfBase + virtualMs));
+    if (realCancelRaf) window.cancelAnimationFrame = (id) => realCancelRaf(id);
+
+    window.setTimeout = (fn, delay = 0, ...args) => {
+      const id = nextTimerId++;
+      timers.set(id, { due: virtualMs + Math.max(0, Number(delay) || 0), fn, args, interval: 0 });
+      return id;
+    };
+    window.setInterval = (fn, delay = 0, ...args) => {
+      const id = nextTimerId++;
+      const every = Math.max(1, Number(delay) || 0);
+      timers.set(id, { due: virtualMs + every, fn, args, interval: every });
+      return id;
+    };
+    window.clearTimeout = (id) => timers.delete(id);
+    window.clearInterval = (id) => timers.delete(id);
+
+    function tick() {
+      frames += 1;
+      virtualMs = frames * frameMs;
+      // Snapshot semantics: timers scheduled by callbacks during this pass
+      // fire on a later frame, so a setTimeout(fn, 0) chain cannot starve a
+      // frame. Sub-frame intervals are quantized to frame boundaries.
+      for (const [id, timer] of [...timers]) {
+        if (timer.due > virtualMs) continue;
+        try {
+          timer.fn(...timer.args);
+        } catch (error) {
+          console.error("[galcode virtual clock] timer callback failed:", error);
+        }
+        if (timer.interval) {
+          timer.due += timer.interval;
+          if (timer.due <= virtualMs) timer.due = virtualMs + timer.interval;
+        } else {
+          timers.delete(id);
+        }
+      }
+      realRaf(tick);
+    }
+    realRaf(tick);
+  }, frameMs);
+}

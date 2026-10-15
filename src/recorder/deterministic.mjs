@@ -1,6 +1,7 @@
 import { startMjpegEncoder, writeFrame, finishEncoder, abortEncoder } from "./ffmpeg.mjs";
 import {
   installLanguagePreset,
+  installVirtualClock,
   bodyText,
   isTitleVisible,
   clickElementByText,
@@ -84,6 +85,12 @@ export async function recordDeterministic({
 
   try {
     await installLanguagePreset(page);
+    // Unified virtual clock BEFORE any page script: beginFrame controls when
+    // rAF fires but not the clocks it reads — see installVirtualClock.
+    // GALCODE_NO_VIRTUAL_CLOCK=1 is a debug escape hatch (A/B measurement).
+    if (process.env.GALCODE_NO_VIRTUAL_CLOCK !== "1") {
+      await installVirtualClock(page, frameMs);
+    }
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
 
     // LANGUAGE SELECT screen: pump + click loop (DOM probes work between
