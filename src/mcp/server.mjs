@@ -1075,7 +1075,9 @@ export function validateStory(story, manifest) {
             errors.push(`${label}.transform must be an object like { x: -200, y: 505, scale: 1.9 } or { position: { x, y }, scale: { x, y } }.`);
           }
         }
-        if (String(action.character || "").toLowerCase() === "none") {
+        // Removal intent: character='none' OR assetId='none' (both forms are
+        // compiled to changeFigure:none — see compileAction).
+        if (String(action.character || "").toLowerCase() === "none" || action.assetId === "none") {
           occupied.delete(action.position);
           continue;
         }

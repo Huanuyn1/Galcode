@@ -1698,6 +1698,10 @@ function repairStoryCharacterAssets(story, manifest) {
   for (const scene of story.scenes || []) {
     for (const action of scene.actions || []) {
       if (action?.type !== "figure") continue;
+      // Explicit removal intent (character/assetId 'none') must survive
+      // repair: rewriting it to a real model made removed characters re-enter
+      // for a beat before the replacement entered — the visible swap flicker.
+      if (action.assetId === "none" || String(action.character || "").toLowerCase() === "none") continue;
       const characterKey = canonicalCharacterKey(action.character);
       if (!characterKey) continue;
       action.character = characterDisplayName(characterKey);
