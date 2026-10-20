@@ -20,21 +20,23 @@ afterEach(async () => {
 
 describe("resolveRecordMode / recordTimeoutMs", () => {
   it("maps flags to modes and rejects unknown modes", () => {
-    expect(resolveRecordMode({})).toBe("realtime");
-    expect(resolveRecordMode({ deterministic: true })).toBe("deterministic");
+    expect(resolveRecordMode({})).toBe("deterministic");
+    expect(resolveRecordMode({ realtime: true })).toBe("realtime");
+    expect(resolveRecordMode({ mode: "realtime" })).toBe("realtime");
     expect(resolveRecordMode({ mode: "deterministic" })).toBe("deterministic");
     expect(() => resolveRecordMode({ mode: "yolo" })).toThrow(/--mode/);
   });
 
   it("timeout = max(180s, duration*2 + 180s), overridable", () => {
-    expect(recordTimeoutMs(15)).toBe(210000);
-    expect(recordTimeoutMs(1)).toBe(182000);
-    expect(recordTimeoutMs(0)).toBe(180000);
-    expect(recordTimeoutMs(600)).toBe(1380000);
+    expect(recordTimeoutMs(15, { mode: "realtime" })).toBe(210000);
+    expect(recordTimeoutMs(1, { mode: "realtime" })).toBe(182000);
+    expect(recordTimeoutMs(0, { mode: "realtime" })).toBe(180000);
+    expect(recordTimeoutMs(600, { mode: "realtime" })).toBe(1380000);
     expect(recordTimeoutMs(15, { recordTimeout: 5000 })).toBe(5000);
-    // deterministic renders ~6x slower than wall clock — wider allowance
+    // deterministic is the default and renders ~6x slower than wall clock — wider allowance
     expect(recordTimeoutMs(15, { mode: "deterministic" })).toBe(300000);
     expect(recordTimeoutMs(600, { mode: "deterministic" })).toBe(4980000);
+    expect(recordTimeoutMs(600)).toBe(4980000);
   });
 });
 

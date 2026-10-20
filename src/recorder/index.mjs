@@ -32,7 +32,9 @@ export async function readStoryDuration(projectDir) {
 }
 
 export function resolveRecordMode(flags = {}) {
-  const raw = String(flags.mode || (flags.deterministic ? "deterministic" : "realtime")).toLowerCase();
+  // deterministic is the default: the virtual frame clock keeps output smooth
+  // regardless of host load. realtime is the legacy wall-clock fallback.
+  const raw = String(flags.mode || (flags.realtime ? "realtime" : "deterministic")).toLowerCase();
   if (raw === "realtime" || raw === "deterministic") return raw;
   throw new Error(`Unknown --mode: ${raw}. Use realtime or deterministic.`);
 }

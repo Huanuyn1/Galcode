@@ -15,7 +15,7 @@ GUI 弃用，项目转为以 dsh（DeepSeek Harness）为主体的终端应用�
 让"录屏"以工程化的方式回归，不再依赖脆弱的实时录制：
 
 - ~~录制回归：从 WebGAL 预览页面直接产出成片视频~~（已在 next 分支落地：`galcode record`，基于 pinned chrome-headless-shell + CDP 帧管线 + BGM 后期混音）
-- 基于 Chromium beginFrame 的确定性逐帧渲染（帧时钟由渲染器驱动，不再靠墙钟截图）——`--mode deterministic` 实验性落地，仍按 WebGAL 兼容性持续打磨
+- ~~基于 Chromium beginFrame 的确定性逐帧渲染（帧时钟由渲染器驱动，不再靠墙钟截图）~~（已成为默认录制模式；realtime 仅作快速预览）
 - canvas MV：为歌曲类二创提供程序化 MV 画面生成
 
 ## v0.4 — 音频域

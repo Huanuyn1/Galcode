@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { killChildTree } from "./proc.mjs";
 import { recordProject } from "./recorder/index.mjs";
 import { checkLive2DCompat } from "./live2d-compat.mjs";
+import { ensurePixiLive2DPatch } from "./live2d-lib-patch.mjs";
 import { applyGazeDirection } from "./gaze.mjs";
 
 // Cross-platform helpers.  Code is shared across macOS / Linux / Windows;
@@ -446,9 +447,10 @@ Recording:
   records that page. --duration defaults to the compiled story timeline; add
   --record to make/yolo flows to record right after compiling. BGM from
   story.json is mixed in afterwards (atrim/afade/volume/amix, exact duration).
-  --mode realtime (default) captures paced JPEG frames over CDP;
-  --mode deterministic (experimental) drives HeadlessExperimental.beginFrame so
-  rAF/PIXI follow a virtual frame clock. Timeout: max(180s, duration*2+180s);
+  --mode deterministic (default) drives HeadlessExperimental.beginFrame so
+  rAF/PIXI follow a virtual frame clock — smooth output under any host load;
+  --mode realtime captures paced JPEG frames over CDP (legacy, can stutter).
+  Timeout: max(180s, duration*2+180s);
   a partial recording is kept if ffmpeg already wrote output.
 
 Preview:
@@ -1088,6 +1090,7 @@ async function installLive2DRuntimeCommand(flags, positionals) {
   }
   const webgalDir = path.resolve(flags.webgalDir || "vendor/webgal-mygo/packages/webgal");
   const copied = await copyLive2DRuntime(path.resolve(sourceArg), webgalDir);
+  await ensurePixiLive2DPatch(path.resolve(webgalDir, "..", ".."));
   console.log(`Installed Live2D runtime into ${path.join(webgalDir, "public", "lib")}`);
   for (const file of copied) console.log(`- ${file}`);
 }
@@ -3003,6 +3006,8 @@ async function startWebGALPreview(projectDir, flags) {
   if (!fssync.existsSync(parserBuild) || flags.rebuildWebgalParser) {
     await run("npm", ["run", "build"], { cwd: parserDir });
   }
+
+  await ensurePixiLive2DPatch(webgalWorkspaceRoot);
 
   await fs.rm(publicGameDir, { recursive: true, force: true });
   if (baseGameDir && fssync.existsSync(baseGameDir)) await copyDir(baseGameDir, publicGameDir);

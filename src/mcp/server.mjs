@@ -502,7 +502,7 @@ function toolDefinitions() {
           fps: { type: "number", description: "Target frames per second. Defaults to 30." },
           width: { type: "number", description: "Video width. Defaults to 1280." },
           height: { type: "number", description: "Video height. Defaults to 720." },
-          mode: { type: "string", enum: ["realtime", "deterministic"], description: "Capture mode. realtime (default) paces CDP screencast frames; deterministic (experimental) drives HeadlessExperimental.beginFrame on a virtual frame clock." },
+          mode: { type: "string", enum: ["realtime", "deterministic"], description: "Capture mode. deterministic (default, recommended) drives HeadlessExperimental.beginFrame on a virtual frame clock — smooth output regardless of host load. realtime paces CDP screencast frames on the wall clock and WILL stutter under load; use only for quick previews." },
           noBgm: { type: "boolean", description: "Skip the BGM post-mix step." }
         }
       }
