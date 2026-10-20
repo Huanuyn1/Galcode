@@ -239,6 +239,17 @@ const STYLE_GUIDE = [
   "The public repository does not bundle official Live2D SDK/runtime or official model assets. If assets are missing, write stories that can still compile, then tell the user which files must be supplied for full Live2D output."
 ].join("\n");
 
+const WORKFLOW_GUARDRAILS = [
+  "Operational rules — read before running any preview/record job:",
+  "1. NEVER edit engine, vendor/, or src/ files. If the toolchain misbehaves, report the exact error to the user and stop. Do not patch, do not work around silently.",
+  "2. Before any long recording, validate the pipeline with a short one first (galcode_render_video with duration=10~15). Only record the full story after the short one looks right.",
+  "3. Never overwrite a final.mp4 the user may not have seen: record to a new file (final-v2.mp4, …) or ask first. A cancelled record destroys the target file.",
+  "4. galcode_render_video: leave mode unset (deterministic is the default and the only smooth one). Do not pass mode=realtime unless the user explicitly asks for a quick rough preview.",
+  "5. Browser download/probe failures self-heal (integrity re-download, sandboxless fallback). If it still fails after that, report; never hand-tune launch flags or loop retries.",
+  "6. Do not declare a platform/API 'removed' or 'unsupported' from one local failure. Check the runtime-status resource or ask the user.",
+  "7. When something looks wrong in a recording, extract a frame and look at it before theorizing (ffmpeg -ss <t> -i final.mp4 -frames:v 1 out.png)."
+].join("\n");
+
 const EXAMPLE_STORY = {
   title: "雨后还要继续",
   description: "A short non-commercial fan scene about saying one true thing after avoiding many.",
@@ -271,6 +282,7 @@ const RESOURCE_DEFS = [
   { uri: "galcode://assets", name: "Galcode asset summary", mimeType: "application/json", description: "Available asset ids and metadata; does not include copyrighted file contents." },
   { uri: "galcode://story-schema", name: "Galcode story schema", mimeType: "application/json", description: "Structured story JSON shape expected by galcode_compile_story." },
   { uri: "galcode://webgal-rules", name: "Galcode WebGAL rules", mimeType: "text/plain", description: "Rules for positions, figure actions, dialogue, and engine-compatible scripts." },
+  { uri: "galcode://workflow-guardrails", name: "Galcode workflow guardrails", mimeType: "text/plain", description: "Operational safety rules for preview/record jobs (no source edits, short-test-first, never overwrite deliverables)." },
   { uri: "galcode://style-guide", name: "Galcode style guide", mimeType: "text/plain", description: "Creative guidance for the host AI while iterating a story with the user." },
   { uri: "galcode://examples", name: "Galcode examples", mimeType: "application/json", description: "Small story JSON examples for the host model." },
   { uri: "galcode://runtime-status", name: "Galcode runtime status", mimeType: "application/json", description: "Local dependency and runtime availability summary." }
@@ -595,6 +607,8 @@ async function readResource(uri) {
     text = jsonString(STORY_SCHEMA);
   } else if (uri === "galcode://webgal-rules") {
     text = WEBGAL_RULES;
+  } else if (uri === "galcode://workflow-guardrails") {
+    text = WORKFLOW_GUARDRAILS;
   } else if (uri === "galcode://style-guide") {
     text = STYLE_GUIDE;
   } else if (uri === "galcode://examples") {
@@ -620,7 +634,7 @@ function getPrompt(name, args) {
             type: "text",
             text: [
               "You are writing a Galcode story JSON for a non-commercial fan work.",
-              "First read galcode://characters, galcode://assets, galcode://story-schema, and galcode://webgal-rules.",
+              "First read galcode://characters, galcode://assets, galcode://story-schema, galcode://webgal-rules, and galcode://workflow-guardrails.",
               `User idea: ${args.idea || ""}`,
               `Target duration: ${args.durationSec || 60} seconds.`,
               "Use only asset ids that exist in galcode://assets. Return only valid JSON matching galcode://story-schema."

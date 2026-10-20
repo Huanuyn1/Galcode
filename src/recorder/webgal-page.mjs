@@ -11,6 +11,10 @@ const TITLE_SELECTOR = ".Title_button, [class*=\"Title_button\"]";
 const CANVAS_SELECTOR = "#pixiCanvas, canvas";
 const LANGUAGE_CLICK_PATTERN = /简体中文|简体|中文|Chinese|CHS|日本語|English/i;
 const START_CLICK_PATTERN = /开始游戏|继续游戏|COMMENCER|CONTINUER|开始|继续|START|CONTINUE/i;
+// A game theme (game/template/**/*.scss) routes styling through emotion and
+// the Title_button class gets hashed away, so the class selector alone can
+// miss a perfectly normal title screen — fall back to button text.
+const TITLE_TEXT_PATTERN = /开始游戏|新游戏|继续游戏|开始|START|COMMENCER|NEW GAME/i;
 
 export function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -42,7 +46,17 @@ export async function isSelectorVisible(page, selector) {
 }
 
 export async function isTitleVisible(page) {
-  return await isSelectorVisible(page, TITLE_SELECTOR);
+  if (await isSelectorVisible(page, TITLE_SELECTOR)) return true;
+  // Text fallback: matches any visible button-like element with title-menu text.
+  return Boolean(await page.evaluate((source, flags) => {
+    const re = new RegExp(source, flags);
+    return Array.from(document.querySelectorAll('button,[role="button"],a,div,span'))
+      .some((el) => {
+        const rect = el.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return false;
+        return re.test((el.innerText || el.textContent || "").trim());
+      });
+  }, TITLE_TEXT_PATTERN.source, TITLE_TEXT_PATTERN.flags).catch(() => false));
 }
 
 export async function waitForAnySelector(page, selectors, timeoutMs, { pollMs = 250 } = {}) {

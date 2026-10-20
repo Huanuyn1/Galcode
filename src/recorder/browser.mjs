@@ -65,11 +65,11 @@ export function launchArgsForMode(mode, { width, height } = {}) {
   return mode === "deterministic" ? [...base, ...deterministicLaunchArgs()] : base;
 }
 
-async function defaultLaunch(executablePath, args) {
+async function defaultLaunch(executablePath, args, { noSandbox = false } = {}) {
   const launchOptions = {
     executablePath,
     headless: "shell",
-    args,
+    args: noSandbox ? [...args, "--no-sandbox", "--disable-setuid-sandbox"] : args,
     defaultViewport: null,
     protocolTimeout: 300000
   };
@@ -77,20 +77,41 @@ async function defaultLaunch(executablePath, args) {
     return await puppeteer.launch(launchOptions);
   } catch (error) {
     // Container/CI environments often lack user namespaces; retry sandboxless.
+    if (noSandbox) throw error;
     if (!/sandbox|namespace|Operation not permitted|Seccomp/i.test(String(error?.message || error))) throw error;
-    return await puppeteer.launch({
-      ...launchOptions,
-      args: [...args, "--no-sandbox", "--disable-setuid-sandbox"]
-    });
+    return await defaultLaunch(executablePath, args, { noSandbox: true });
   }
 }
 
-export async function launchRecorderBrowser({ executablePath, mode = "realtime", width, height, launchImpl }) {
+// Some sandboxes (e.g. a host-level seccomp wrapper around the whole agent
+// process) let chrome LAUNCH but kill it seconds later ("Target closed" /
+// "Session closed" at the first CDP command). Launch-time retry never sees
+// that — so the probe retries sandboxless on ANY failure and reports which
+// mode survived, and the manifest remembers it for future launches.
+export async function probeBrowserCapabilities(executablePath, { launchImpl } = {}) {
   const launch = launchImpl || defaultLaunch;
-  return await launch(executablePath, launchArgsForMode(mode, { width, height }));
+  let firstError = null;
+  for (const noSandbox of [false, true]) {
+    let browser;
+    try {
+      browser = await launch(executablePath, launchArgsForMode("deterministic", {}), { noSandbox });
+      const page = await browser.newPage();
+      const session = await page.createCDPSession();
+      await session.send("HeadlessExperimental.beginFrame", { noDisplayUpdates: true });
+      return { ok: true, noSandbox };
+    } catch (error) {
+      firstError = firstError ?? error;
+    } finally {
+      await closeBrowserTree(browser);
+    }
+  }
+  return { ok: false, error: String(firstError?.message || firstError), noSandbox: true };
 }
 
-// Close the browser and guarantee the whole tree is gone. @puppeteer/browsers
+export async function launchRecorderBrowser({ executablePath, mode = "realtime", width, height, launchImpl, noSandbox = false }) {
+  const launch = launchImpl || defaultLaunch;
+  return await launch(executablePath, launchArgsForMode(mode, { width, height }), { noSandbox });
+}
 // spawns chrome detached on POSIX and kills the process group on close(); the
 // killChildTree fallback covers a wedged renderer that ignores close().
 export async function closeBrowserTree(browser, { graceMs = 5000 } = {}) {
@@ -105,24 +126,7 @@ export async function closeBrowserTree(browser, { graceMs = 5000 } = {}) {
   }
 }
 
-// Live capability probe: launch, assert the CDP beginFrame command exists
-// (our deterministic mode depends on it; its absence also flags a broken or
-// mismatched binary), then close. Must leave no processes behind.
-export async function probeBrowserCapabilities(executablePath, { launchImpl } = {}) {
-  const launch = launchImpl || defaultLaunch;
-  let browser;
-  try {
-    browser = await launch(executablePath, launchArgsForMode("deterministic", {}));
-    const page = await browser.newPage();
-    const session = await page.createCDPSession();
-    await session.send("HeadlessExperimental.beginFrame", { noDisplayUpdates: true });
-    return { ok: true };
-  } catch (error) {
-    return { ok: false, error: String(error?.message || error) };
-  } finally {
-    await closeBrowserTree(browser);
-  }
-}
+// Live capability probe lives above (with the sandbox self-healing logic).
 
 async function walkFiles(dir, base = dir, out = {}) {
   for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
@@ -201,7 +205,8 @@ async function snapshotInstall(cacheDir, executablePath, probe) {
     installedAt: new Date().toISOString(),
     probeOk: Boolean(probe?.ok),
     probedAt: probe ? new Date().toISOString() : null,
-    probeError: probe && !probe.ok ? probe.error : null
+    probeError: probe && !probe.ok ? probe.error : null,
+    needsNoSandbox: Boolean(probe?.ok && probe.noSandbox)
   };
 }
 
@@ -215,15 +220,15 @@ export async function ensureRecorderBrowser({ cacheDir = recorderCacheDir(), log
   if (manifest) {
     const integrity = await checkInstallIntegrity(cacheDir, manifest);
     if (integrity.ok && manifest.probeOk) {
-      return { executablePath: integrity.executablePath, buildId: manifest.buildId, repaired: false };
+      return { executablePath: integrity.executablePath, buildId: manifest.buildId, repaired: false, needsNoSandbox: Boolean(manifest.needsNoSandbox) };
     }
     if (integrity.ok && !manifest.probeOk) {
       // Installed but never probed (or probe failed last time): probe in place
       // before deciding a re-download is needed.
       const probeResult = await probe(integrity.executablePath);
       if (probeResult.ok) {
-        await writeManifest(cacheDir, { ...manifest, probeOk: true, probedAt: new Date().toISOString(), probeError: null });
-        return { executablePath: integrity.executablePath, buildId: manifest.buildId, repaired: false };
+        await writeManifest(cacheDir, { ...manifest, probeOk: true, probedAt: new Date().toISOString(), probeError: null, needsNoSandbox: Boolean(probeResult.noSandbox) });
+        return { executablePath: integrity.executablePath, buildId: manifest.buildId, repaired: false, needsNoSandbox: Boolean(probeResult.noSandbox) };
       }
       log?.(`Recorder browser failed its capability probe (${probeResult.error}); repairing…`);
     } else {
@@ -254,8 +259,8 @@ export async function ensureRecorderBrowser({ cacheDir = recorderCacheDir(), log
     const probeResult = await probe(executablePath);
     await writeManifest(cacheDir, await snapshotInstall(cacheDir, executablePath, probeResult));
     if (probeResult.ok) {
-      log?.(`Recorder browser ready: ${executablePath}`);
-      return { executablePath, buildId: PINNED_CHROME_BUILD, repaired: attempt > 0 || Boolean(manifest) };
+      log?.(`Recorder browser ready: ${executablePath}${probeResult.noSandbox ? " (no-sandbox mode)" : ""}`);
+      return { executablePath, buildId: PINNED_CHROME_BUILD, repaired: attempt > 0 || Boolean(manifest), needsNoSandbox: Boolean(probeResult.noSandbox) };
     }
     lastError = new Error(`chrome-headless-shell failed capability probe: ${probeResult.error}`);
   }

@@ -207,3 +207,49 @@ describe("launch args", () => {
     expect(deterministic.join(" ")).toContain("--deterministic-mode");
   });
 });
+
+describe("probe sandbox self-healing", () => {
+  it("retries sandboxless when the browser crashes after launch, and remembers", async () => {
+    const { probeBrowserCapabilities } = await import("../src/recorder/browser.mjs");
+    const calls = [];
+    const launchImpl = async (exe, args, { noSandbox } = {}) => {
+      calls.push(noSandbox);
+      if (!noSandbox) {
+        // Launch "succeeds" then the browser dies at the first CDP command —
+        // the sandbox-wrapped-host failure mode.
+        return {
+          newPage: async () => ({
+            createCDPSession: async () => ({ send: async () => { throw new Error("Target closed"); } })
+          }),
+          close: async () => {},
+          process: () => null
+        };
+      }
+      return {
+        newPage: async () => ({ createCDPSession: async () => ({ send: async () => ({}) }) }),
+        close: async () => {},
+        process: () => null
+      };
+    };
+    const result = await probeBrowserCapabilities("/fake/exe", { launchImpl });
+    expect(result.ok).toBe(true);
+    expect(result.noSandbox).toBe(true);
+    expect(calls).toEqual([false, true]);
+  });
+
+  it("propagates needsNoSandbox through the manifest", async () => {
+    const deps = {
+      cacheDir: tmp,
+      installImpl: stubInstall(),
+      probeImpl: async () => ({ ok: true, noSandbox: true }),
+      log: () => {}
+    };
+    const first = await ensureRecorderBrowser(deps);
+    expect(first.needsNoSandbox).toBe(true);
+    const manifest = JSON.parse(await fs.readFile(path.join(tmp, "manifest.json"), "utf8"));
+    expect(manifest.needsNoSandbox).toBe(true);
+    // Fast path keeps the flag without re-probing.
+    const second = await ensureRecorderBrowser({ ...deps, probeImpl: async () => { throw new Error("must not probe"); } });
+    expect(second.needsNoSandbox).toBe(true);
+  });
+});

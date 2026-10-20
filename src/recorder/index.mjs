@@ -96,7 +96,7 @@ export async function recordProject(projectDir, flags = {}, deps = {}) {
     }
 
     const ensureBrowser = deps.ensureBrowser || ensureRecorderBrowser;
-    const { executablePath } = await ensureBrowser({ cacheDir: flags.browserCacheDir ? path.resolve(flags.browserCacheDir) : undefined, log });
+    const { executablePath, needsNoSandbox } = await ensureBrowser({ cacheDir: flags.browserCacheDir ? path.resolve(flags.browserCacheDir) : undefined, log });
     await fs.mkdir(path.dirname(out), { recursive: true });
     await fs.rm(out, { force: true });
 
@@ -105,7 +105,7 @@ export async function recordProject(projectDir, flags = {}, deps = {}) {
     const mocScan = await scanMoc3Versions(path.join(projectDir, "game"));
 
     log(`Recording ${width}x${height} @ ${fps} fps, ${durationSec}s, mode=${mode} → ${out}`);
-    browser = await (deps.launchBrowser || launchRecorderBrowser)({ executablePath, mode, width, height });
+    browser = await (deps.launchBrowser || launchRecorderBrowser)({ executablePath, mode, width, height, noSandbox: Boolean(needsNoSandbox) });
     const recorder = mode === "deterministic" ? recordDeterministic : recordRealtime;
     stats = await recorder({
       browser,
