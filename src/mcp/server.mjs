@@ -244,7 +244,7 @@ const WORKFLOW_GUARDRAILS = [
   "1. NEVER edit engine, vendor/, or src/ files. If the toolchain misbehaves, report the exact error to the user and stop. Do not patch, do not work around silently.",
   "2. Before any long recording, validate the pipeline with a short one first (galcode_render_video with duration=10~15). Only record the full story after the short one looks right.",
   "3. Never overwrite a final.mp4 the user may not have seen: record to a new file (final-v2.mp4, …) or ask first. A cancelled record destroys the target file.",
-  "4. galcode_render_video: leave mode unset (deterministic is the default and the only smooth one). Do not pass mode=realtime unless the user explicitly asks for a quick rough preview.",
+  "4. galcode_render_video: leave mode unset (deterministic is the default and the only smooth one). Do not pass mode=realtime unless the user explicitly asks for a quick rough preview. If a deterministic run dies with 'Target closed', the recorder retries sandboxless on its own — never switch to realtime because of that error.",
   "5. Browser download/probe failures self-heal (integrity re-download, sandboxless fallback). If it still fails after that, report; never hand-tune launch flags or loop retries.",
   "6. Do not declare a platform/API 'removed' or 'unsupported' from one local failure. Check the runtime-status resource or ask the user.",
   "7. When something looks wrong in a recording, extract a frame and look at it before theorizing (ffmpeg -ss <t> -i final.mp4 -frames:v 1 out.png)."

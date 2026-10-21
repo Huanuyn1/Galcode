@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import fssync from "node:fs";
 import path from "node:path";
 import { killChildTree } from "../proc.mjs";
-import { ensureRecorderBrowser, launchRecorderBrowser, closeBrowserTree } from "./browser.mjs";
+import { ensureRecorderBrowser, launchRecorderBrowser, closeBrowserTree, markNeedsNoSandbox } from "./browser.mjs";
 import { assertFfmpegAvailable } from "./ffmpeg.mjs";
 import { recordRealtime } from "./realtime.mjs";
 import { recordDeterministic } from "./deterministic.mjs";
@@ -105,27 +105,44 @@ export async function recordProject(projectDir, flags = {}, deps = {}) {
     const mocScan = await scanMoc3Versions(path.join(projectDir, "game"));
 
     log(`Recording ${width}x${height} @ ${fps} fps, ${durationSec}s, mode=${mode} → ${out}`);
-    browser = await (deps.launchBrowser || launchRecorderBrowser)({ executablePath, mode, width, height, noSandbox: Boolean(needsNoSandbox) });
     const recorder = mode === "deterministic" ? recordDeterministic : recordRealtime;
-    stats = await recorder({
-      browser,
-      url,
-      out,
-      width,
-      height,
-      fps,
-      durationSec,
-      ffmpeg: ffmpegCommand,
-      crf: flags.crf !== undefined ? Number(flags.crf) : 18,
-      startDelayMs: Number(flags.startDelay || 1500),
-      sceneDelayMs: Number(flags.sceneDelay || 8000),
-      autoAdvanceIntervalMs: flags.clickInterval ? Number(flags.clickInterval) : 4000,
-      noAutoplay: Boolean(flags.noAutoplay),
-      stopOnTitle: Boolean(flags.stopOnTitle),
-      requiredMocVersion: mocScan.maxVersion || 0,
-      shouldStop: () => timedOut,
-      log
-    });
+    const launch = deps.launchBrowser || launchRecorderBrowser;
+    const runOnce = async (noSandbox) => {
+      browser = await launch({ executablePath, mode, width, height, noSandbox });
+      return await recorder({
+        browser,
+        url,
+        out,
+        width,
+        height,
+        fps,
+        durationSec,
+        ffmpeg: ffmpegCommand,
+        crf: flags.crf !== undefined ? Number(flags.crf) : 18,
+        startDelayMs: Number(flags.startDelay || 1500),
+        sceneDelayMs: Number(flags.sceneDelay || 8000),
+        autoAdvanceIntervalMs: flags.clickInterval ? Number(flags.clickInterval) : 4000,
+        noAutoplay: Boolean(flags.noAutoplay),
+        stopOnTitle: Boolean(flags.stopOnTitle),
+        requiredMocVersion: mocScan.maxVersion || 0,
+        shouldStop: () => timedOut,
+        log
+      });
+    };
+    try {
+      stats = await runOnce(Boolean(needsNoSandbox));
+    } catch (error) {
+      // Host-level sandboxes can kill chrome mid-record ('Target closed' at a
+      // beginFrame/screencast) even when the capability probe passed. Retry
+      // once sandboxless before giving up — and never suggest realtime here:
+      // deterministic output is the only smooth one.
+      if (needsNoSandbox || !/Target closed|Session closed|Target crashed|Connection closed/i.test(String(error?.message || error))) throw error;
+      log("Browser died mid-record (sandbox kill); retrying with --no-sandbox…");
+      await closeBrowserTree(browser);
+      browser = null;
+      stats = await runOnce(true);
+      await markNeedsNoSandbox(flags.browserCacheDir ? path.resolve(flags.browserCacheDir) : undefined);
+    }
   } finally {
     clearTimeout(timeoutTimer);
     process.off("SIGINT", onSignal);

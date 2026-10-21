@@ -272,6 +272,14 @@ export async function ensureRecorderBrowser({ cacheDir = recorderCacheDir(), log
   ].join(" "));
 }
 
+// Persist a mid-record sandbox discovery so the next run launches
+// sandboxless from the start (skips one doomed attempt).
+export async function markNeedsNoSandbox(cacheDir = recorderCacheDir()) {
+  const manifest = await readManifest(cacheDir);
+  if (!manifest || manifest.needsNoSandbox) return;
+  await writeManifest(cacheDir, { ...manifest, needsNoSandbox: true });
+}
+
 // Fast, launch-free status for `galcode doctor`.
 export async function recorderBrowserStatus(cacheDir = recorderCacheDir()) {
   const manifest = await readManifest(cacheDir);

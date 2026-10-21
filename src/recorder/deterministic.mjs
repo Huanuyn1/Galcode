@@ -61,8 +61,8 @@ export async function recordDeterministic({
     } catch (error) {
       throw new Error([
         `HeadlessExperimental.beginFrame failed: ${error.message}.`,
-        "Deterministic recording needs a chrome-headless-shell build with begin-frame control;",
-        "drop --deterministic to use realtime mode."
+        "If this is 'Target closed'/'Session closed', the browser died mid-record — galcode retries once with --no-sandbox automatically.",
+        "Do NOT fall back to realtime for this; report the log if the retry also fails."
       ].join(" "));
     }
   };
