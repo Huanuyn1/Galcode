@@ -69,4 +69,38 @@ describe("recordProject cleanup on early failure", () => {
     })).rejects.toThrow(/--mode/);
     expect(previewStarted).toBe(false);
   });
+
+  it("walks beginFrame → +noSandbox → vt-policy on crash-pattern failures", async () => {
+    const launches = [];
+    const fakeBrowser = () => ({ process: () => null, close: async () => {} });
+    await recordProject(tmp, { quiet: true, mode: "deterministic", duration: 1, noBgm: true }, {
+      startWebGALPreview: async () => ({ child: null, url: "http://127.0.0.1:1" }),
+      ensureBrowser: async () => ({ executablePath: "/nonexistent/chrome" }),
+      launchBrowser: async ({ noSandbox, mode }) => {
+        launches.push({ noSandbox, mode });
+        return fakeBrowser();
+      },
+      recordDeterministic: async () => { throw new Error("Protocol error (HeadlessExperimental.beginFrame): Target closed"); },
+      recordVtPolicy: async ({ out }) => { await fs.writeFile(out, "fake video"); return { frames: 1 }; }
+    });
+    // beginFrame → +noSandbox → vt-policy (vt launches with base args)
+    expect(launches).toEqual([
+      { noSandbox: false, mode: "deterministic" },
+      { noSandbox: true, mode: "deterministic" },
+      { noSandbox: true, mode: "realtime" }
+    ]);
+  });
+
+  it("honors a remembered vt-policy driver without re-crashing", async () => {
+    const launches = [];
+    const fakeBrowser = () => ({ process: () => null, close: async () => {} });
+    await recordProject(tmp, { quiet: true, mode: "deterministic", duration: 1, noBgm: true }, {
+      startWebGALPreview: async () => ({ child: null, url: "http://127.0.0.1:1" }),
+      ensureBrowser: async () => ({ executablePath: "/nonexistent/chrome", deterministicDriver: "vt-policy" }),
+      launchBrowser: async ({ mode }) => { launches.push(mode); return fakeBrowser(); },
+      recordDeterministic: async () => { throw new Error("must not be called"); },
+      recordVtPolicy: async ({ out }) => { await fs.writeFile(out, "fake video"); return { frames: 1 }; }
+    });
+    expect(launches).toEqual(["realtime"]);
+  });
 });

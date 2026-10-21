@@ -220,7 +220,7 @@ export async function ensureRecorderBrowser({ cacheDir = recorderCacheDir(), log
   if (manifest) {
     const integrity = await checkInstallIntegrity(cacheDir, manifest);
     if (integrity.ok && manifest.probeOk) {
-      return { executablePath: integrity.executablePath, buildId: manifest.buildId, repaired: false, needsNoSandbox: Boolean(manifest.needsNoSandbox) };
+      return { executablePath: integrity.executablePath, buildId: manifest.buildId, repaired: false, needsNoSandbox: Boolean(manifest.needsNoSandbox), deterministicDriver: manifest.deterministicDriver || null };
     }
     if (integrity.ok && !manifest.probeOk) {
       // Installed but never probed (or probe failed last time): probe in place
@@ -228,7 +228,7 @@ export async function ensureRecorderBrowser({ cacheDir = recorderCacheDir(), log
       const probeResult = await probe(integrity.executablePath);
       if (probeResult.ok) {
         await writeManifest(cacheDir, { ...manifest, probeOk: true, probedAt: new Date().toISOString(), probeError: null, needsNoSandbox: Boolean(probeResult.noSandbox) });
-        return { executablePath: integrity.executablePath, buildId: manifest.buildId, repaired: false, needsNoSandbox: Boolean(probeResult.noSandbox) };
+        return { executablePath: integrity.executablePath, buildId: manifest.buildId, repaired: false, needsNoSandbox: Boolean(probeResult.noSandbox), deterministicDriver: manifest.deterministicDriver || null };
       }
       log?.(`Recorder browser failed its capability probe (${probeResult.error}); repairing…`);
     } else {
@@ -260,7 +260,7 @@ export async function ensureRecorderBrowser({ cacheDir = recorderCacheDir(), log
     await writeManifest(cacheDir, await snapshotInstall(cacheDir, executablePath, probeResult));
     if (probeResult.ok) {
       log?.(`Recorder browser ready: ${executablePath}${probeResult.noSandbox ? " (no-sandbox mode)" : ""}`);
-      return { executablePath, buildId: PINNED_CHROME_BUILD, repaired: attempt > 0 || Boolean(manifest), needsNoSandbox: Boolean(probeResult.noSandbox) };
+      return { executablePath, buildId: PINNED_CHROME_BUILD, repaired: attempt > 0 || Boolean(manifest), needsNoSandbox: Boolean(probeResult.noSandbox), deterministicDriver: manifest?.deterministicDriver || null };
     }
     lastError = new Error(`chrome-headless-shell failed capability probe: ${probeResult.error}`);
   }
@@ -272,12 +272,19 @@ export async function ensureRecorderBrowser({ cacheDir = recorderCacheDir(), log
   ].join(" "));
 }
 
-// Persist a mid-record sandbox discovery so the next run launches
-// sandboxless from the start (skips one doomed attempt).
-export async function markNeedsNoSandbox(cacheDir = recorderCacheDir()) {
+// Persist mid-record discoveries (sandbox kills, beginFrame traps) so the next
+// run starts with the right quirks instead of re-learning them by crashing.
+export async function markRecorderQuirks(cacheDir = recorderCacheDir(), quirks = {}) {
   const manifest = await readManifest(cacheDir);
-  if (!manifest || manifest.needsNoSandbox) return;
-  await writeManifest(cacheDir, { ...manifest, needsNoSandbox: true });
+  if (!manifest) return;
+  const next = { ...manifest };
+  if (quirks.needsNoSandbox) next.needsNoSandbox = true;
+  if (quirks.deterministicDriver) next.deterministicDriver = quirks.deterministicDriver;
+  await writeManifest(cacheDir, next);
+}
+
+export async function markNeedsNoSandbox(cacheDir = recorderCacheDir()) {
+  await markRecorderQuirks(cacheDir, { needsNoSandbox: true });
 }
 
 // Fast, launch-free status for `galcode doctor`.

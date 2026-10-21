@@ -244,6 +244,34 @@ export async function readVirtualClock(page) {
   })).catch(() => ({ rafTicks: 0, advances: 0 }));
 }
 
+// Virtual-clock advancer driven by the page's (virtualized) performance.now —
+// for the vt-policy driver, where rAF ticks at a fixed 60Hz of virtual time
+// regardless of the recording fps, so tick counting would run 2x fast at 30fps.
+export async function startVirtualAutoAdvanceTime(page, intervalMs) {
+  await page.evaluate((interval) => {
+    function sendKey() {
+      const make = (type) => new KeyboardEvent(type, { key: " ", code: "Space", keyCode: 32, which: 32, bubbles: true });
+      document.dispatchEvent(make("keydown"));
+      document.dispatchEvent(make("keyup"));
+    }
+    window.__galcodeVirtualAdvances = window.__galcodeVirtualAdvances || 0;
+    let last = performance.now();
+    const step = () => {
+      const now = performance.now();
+      if (now - last >= interval) {
+        last = now;
+        window.__galcodeVirtualAdvances += 1;
+        sendKey();
+      }
+      window.requestAnimationFrame(step);
+    };
+    if (!window.__galcodeVirtualAdvancerTime) {
+      window.__galcodeVirtualAdvancerTime = true;
+      window.requestAnimationFrame(step);
+    }
+  }, Math.max(250, Number(intervalMs) || 4000)).catch(() => {});
+}
+
 // Authoritative runtime check: the moc3 format version the page's
 // live2dcubismcore.min.js actually supports (null = core not loaded).
 export async function probePageCubismCore(page) {

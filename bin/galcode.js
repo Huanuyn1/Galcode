@@ -9,7 +9,7 @@ import { launchDsh, setupDshProfile, doctorDsh, readGalcodeVersion, DSH_TUI_PACK
 const LEGACY_COMMANDS = new Set([
   "agent", "chat", "interactive", "configure", "download-assets",
   "install-live2d-runtime", "prepare-live2d", "index", "discuss",
-  "yolo", "make", "compile", "preview", "record"
+  "yolo", "make", "compile", "preview", "record", "browser"
 ]);
 
 const argv = process.argv.slice(2);
@@ -47,7 +47,7 @@ Usage:
   galcode setup                 初始化/修复 dsh profile(幂等,可重复运行)
   galcode doctor                检查运行环境(Node、dsh、profile、WebGAL、Live2D、ffmpeg)
   galcode cli <子命令>           旧版 CLI:agent / discuss / yolo / make / compile / preview /
-                                record / configure / index / download-assets /
+                                record / browser / configure / index / download-assets /
                                 install-live2d-runtime / prepare-live2d / setup(克隆 vendor 仓库)
 
 迁移说明:

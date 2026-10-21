@@ -363,6 +363,7 @@ export async function main(argv) {
   if (command === "compile") return compileCommand(flags, positionals);
   if (command === "preview") return previewCommand(flags, positionals);
   if (command === "record") return recordCommand(flags, positionals);
+  if (command === "browser") return browserCommand(flags, positionals);
 
   throw new Error(`Unknown command: ${command}`);
 }
@@ -441,6 +442,9 @@ Recording:
   galcode record <projectDir> [--out final.mp4] [--duration 180] [--fps 30]
                  [--width 1280] [--height 720] [--url http://localhost:3000]
                  [--mode realtime|deterministic] [--deterministic] [--no-bgm]
+  galcode browser status|probe
+                 Inspect the pinned recorder browser; "probe" runs a live
+                 capability check (beginFrame), ignoring the cached result.
   Requires ffmpeg. Records the WebGAL preview with a pinned chrome-headless-shell
   (downloaded into .galcode/browser on first use, never at npm install time).
   If no --url is provided, Galcode auto-starts the local WebGAL preview and
@@ -1221,6 +1225,29 @@ async function recordCommand(flags, positionals) {
   // project dir instead; recordProject reads --video-out).
   const { out, ...rest } = flags;
   await recordProject(projectDir, { ...rest, videoOut: flags.videoOut || out }, { startWebGALPreview });
+}
+
+// `galcode browser probe`: live capability probe of the pinned recorder
+// browser, ignoring the cached manifest result — for diagnosing hosts where
+// deterministic recording misbehaves (e.g. beginFrame traps).
+async function browserCommand(flags, positionals) {
+  const sub = positionals[0] || "status";
+  const { recorderCacheDir, recorderBrowserStatus, checkInstallIntegrity, probeBrowserCapabilities } = await import("./recorder/browser.mjs");
+  const cacheDir = flags.browserCacheDir ? path.resolve(flags.browserCacheDir) : recorderCacheDir();
+  if (sub === "status") {
+    const status = await recorderBrowserStatus(cacheDir);
+    console.log(status.detail);
+    return;
+  }
+  if (sub !== "probe") throw new Error(`Unknown browser subcommand: ${sub} (use "status" or "probe")`);
+  const manifestPath = path.join(cacheDir, "manifest.json");
+  const manifest = fssync.existsSync(manifestPath) ? JSON.parse(await fs.readFile(manifestPath, "utf8")) : null;
+  const integrity = await checkInstallIntegrity(cacheDir, manifest);
+  if (!integrity.ok) throw new Error(`Recorder browser not intact (${integrity.reason}); run \`galcode record\` once to install/repair it.`);
+  console.log(`Probing ${integrity.executablePath} …`);
+  const result = await probeBrowserCapabilities(integrity.executablePath);
+  console.log(JSON.stringify({ ok: result.ok, noSandbox: result.noSandbox ?? false, error: result.error || null }, null, 2));
+  if (!result.ok) process.exitCode = 1;
 }
 
 async function askCreativeBrief(flags) {

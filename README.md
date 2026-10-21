@@ -131,6 +131,8 @@ galcode cli record outputs/<作品名> --duration 60 --fps 30 --out outputs/<作
 
 模式：`--mode deterministic`（默认，`HeadlessExperimental.beginFrame` 驱动虚拟帧时钟逐帧渲染，页内 rAF / performance.now / Date.now / setTimeout 统一虚拟化到帧时钟，动作与台词节奏与墙钟渲染耗时解耦，出片始终丝滑）；`--mode realtime`（ paced CDP 截图管线，墙钟节奏，机器负载高时会掉帧，仅用于快速预览）。旧的 `--capture electron|screenshot` 已被 `--mode realtime|deterministic` 取代。超时规则：`max(180s, duration*2+180s)`；ffmpeg 已写出文件时容忍非零退出（保留半成品）。需要 ffmpeg；浏览器完整性（二进制+资源文件清单）和能力探针（CDP `HeadlessExperimental.beginFrame`）在录制前自检，失败自动重新下载，`galcode doctor` 可查看状态。
 
+deterministic 有两条驱动链：默认 beginFrame（最省 CDP 往返）；宿主上 beginFrame 把浏览器进程搞崩（如 macOS 26 arm64 的 SIGTRAP）时自动回退到 vt-policy 驱动（页内虚拟时钟 + 逐帧 CDP tick + captureScreenshot，不依赖任何 begin-frame 开关），回退结果会写进 `.galcode/browser/manifest.json` 让下次直接用。`galcode browser probe` 可忽略缓存现场重测浏览器能力。
+
 Live2D 运行时补丁：预览/录制启动时会幂等地给 `pixi-live2d-display-webgal` 打两个补丁——(1) `CubismModel` 不再缓存参数/部件的 TypedArray 视图（asm.js 堆增长会换掉底层 ArrayBuffer，缓存视图会静默失效、模型冻在默认姿态）；(2) `live2dcubismcore.min.js` 初始堆 16MB → 256MB（加载期不再触发堆增长）。若自行更新这两个依赖需确认补丁仍适用（`galcode doctor`/preview 日志会提示）。
 
 ## MCP 服务器
