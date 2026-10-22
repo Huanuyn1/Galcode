@@ -8,7 +8,12 @@ AI 驱动的 WebGAL 二创工作室。输入一句脑洞，Galcode 会和你讨�
 
 现在的 Galcode 是一个以 [dsh](https://github.com/deepseek-ai/deepseek-harness)（DeepSeek Harness）为主体的终端应用：裸 `galcode` 启动一个 TUI 创作台，里面是带着 Galcode 人格、技能和全套工具的 AI 导演。视频录制基于 Chromium（chrome-headless-shell + CDP）确定性逐帧渲染：动作与台词节奏和墙钟渲染耗时完全解耦，出片始终丝滑。更新记录见 [CHANGELOG.md](CHANGELOG.md)；GUI 时代（v0.1 Electron）存档见文末。
 
-第一次使用建议先看新手手册：[小白看这里](docs/小白看这里.md)。
+第一次使用建议先看新手手册：**如果你没有 CS 基础，请看 [小白看这里](docs/小白看这里.md)**——从装 Node 到录出成片，每一步都按零基础写。
+
+## 平台支持
+
+- **Linux / macOS**：完整链路（创作→预览→录制）已实测通过。
+- **Windows**：CI 上会跑单元测试和 CLI 冒烟，但**完整的创作→录制链路尚未在 Windows 上人工验收**，不保证开箱即用。Windows 用户遇到问题请到 [Issues](https://github.com/Huanuyn1/Galcode/issues) 反馈。
 
 ## 快速开始
 

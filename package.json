@@ -2,8 +2,21 @@
   "name": "galcode",
   "version": "1.0.0",
   "description": "AI 驱动的 MyGO/Ave Mujica WebGAL 二创工作室:dsh TUI 创作台 + 编译预览 + Chromium 确定性录制出片。",
-  "keywords": ["webgal", "mygo", "ave-mujica", "live2d", "galgame", "dsh", "ai", "tui", "video-recorder"],
-  "repository": { "type": "git", "url": "https://github.com/Huanuyn1/Galcode.git" },
+  "keywords": [
+    "webgal",
+    "mygo",
+    "ave-mujica",
+    "live2d",
+    "galgame",
+    "dsh",
+    "ai",
+    "tui",
+    "video-recorder"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Huanuyn1/Galcode.git"
+  },
   "homepage": "https://github.com/Huanuyn1/Galcode",
   "bugs": "https://github.com/Huanuyn1/Galcode/issues",
   "type": "module",

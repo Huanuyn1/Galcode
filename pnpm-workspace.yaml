@@ -1,2 +1,13 @@
 packages:
   - "packages/*"
+
+# pnpm 12 (strictDepBuilds): these deps carry install scripts we never need
+# (node-pty/koffi native builds are optional for dsh-subprocess-local; the rest
+# are pure-JS postinstalls). Marked false = reviewed, intentionally not built.
+allowBuilds:
+  "@deepseek-ai/dsh-subprocess-local": false
+  "@google/genai": false
+  koffi: false
+  node-pty: false
+  pnpm: false
+  protobufjs: false
