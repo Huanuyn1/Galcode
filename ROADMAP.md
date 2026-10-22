@@ -1,5 +1,13 @@
 # Galcode 更新计划
 
+## v1.0 — 首个正式版（当前版本）
+
+- dsh TUI 创作台 + MCP 服务器 + 旧版 CLI 三形态齐备
+- 确定性录制为默认出片路径;external-clock 回退驱动覆盖 beginFrame 会崩的宿主(macOS 26 arm64)
+- Live2D 冻结修复(asm.js 堆增长)与运行时补丁自动化
+- 编译期视线编排;chara 新版包 25 角色 / 214 模型全索引
+- 详见 [CHANGELOG.md](CHANGELOG.md)
+
 ## v0.2 — TUI 化（已完成）
 
 GUI 弃用，项目转为以 dsh（DeepSeek Harness）为主体的终端应用：

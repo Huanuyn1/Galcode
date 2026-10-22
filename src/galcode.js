@@ -13,6 +13,7 @@ import { recordProject } from "./recorder/index.mjs";
 import { checkLive2DCompat } from "./live2d-compat.mjs";
 import { ensurePixiLive2DPatch } from "./live2d-lib-patch.mjs";
 import { applyGazeDirection } from "./gaze.mjs";
+import { readGalcodeVersion } from "./dsh-profile.mjs";
 
 // Cross-platform helpers.  Code is shared across macOS / Linux / Windows;
 // only the launcher scripts (galcode / galcode.bat) and README differ.
@@ -410,7 +411,7 @@ function toKebab(value) {
 }
 
 function printHelp() {
-  console.log(`Galcode 0.1
+  console.log(`Galcode ${readGalcodeVersion()}
 
 Usage:
   galcode

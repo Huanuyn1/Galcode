@@ -1,12 +1,33 @@
 {
   "name": "galcode",
-  "version": "0.2.0",
-  "description": "AI-assisted CLI pipeline for generating MyGO/Ave Mujica WebGAL fan works.",
+  "version": "1.0.0",
+  "description": "AI 驱动的 MyGO/Ave Mujica WebGAL 二创工作室:dsh TUI 创作台 + 编译预览 + Chromium 确定性录制出片。",
+  "keywords": ["webgal", "mygo", "ave-mujica", "live2d", "galgame", "dsh", "ai", "tui", "video-recorder"],
+  "repository": { "type": "git", "url": "https://github.com/Huanuyn1/Galcode.git" },
+  "homepage": "https://github.com/Huanuyn1/Galcode",
+  "bugs": "https://github.com/Huanuyn1/Galcode/issues",
   "type": "module",
   "bin": {
     "galcode": "./bin/galcode.js",
     "galcode-mcp": "./bin/galcode-mcp.js"
   },
+  "files": [
+    "bin/",
+    "src/",
+    "scripts/",
+    "packages/dsh-galcode/",
+    "themes/",
+    "docs/",
+    "figure/README.md",
+    "galcode",
+    "galcode.bat",
+    "start.sh",
+    "start.bat",
+    "install.sh",
+    "install.bat",
+    "ROADMAP.md",
+    "CHANGELOG.md"
+  ],
   "scripts": {
     "galcode": "node ./bin/galcode.js",
     "mcp": "node ./bin/galcode-mcp.js",

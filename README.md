@@ -1,8 +1,12 @@
 # Galcode
 
-AI 驱动的 WebGAL 二创工作室。输入一句脑洞，Galcode 会和你讨论剧情、生成 story JSON、校验并编译成 WebGAL 工程，然后起一个本地预览服务器——在浏览器里直接看你的 MyGO / Ave Mujica 小剧场。
+[![npm version](https://img.shields.io/npm/v/galcode.svg)](https://www.npmjs.com/package/galcode)
+[![CI](https://github.com/Huanuyn1/Galcode/actions/workflows/ci.yml/badge.svg)](https://github.com/Huanuyn1/Galcode/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-现在的 Galcode 是一个以 [dsh](https://github.com/deepseek-ai/deepseek-harness)（DeepSeek Harness）为主体的终端应用：裸 `galcode` 启动一个 TUI 创作台，里面是带着 Galcode 人格、技能和全套工具的 AI 导演。视频录制已基于 Chromium（chrome-headless-shell + CDP）回归：`galcode record` 直接从 WebGAL 预览页面产出成片（旧的 Electron 方案存档见文末）。
+AI 驱动的 WebGAL 二创工作室。输入一句脑洞，Galcode 会和你讨论剧情、生成 story JSON、校验并编译成 WebGAL 工程，然后起一个本地预览服务器——在浏览器里直接看你的 MyGO / Ave Mujica 小剧场；确认满意后一键录制成 mp4 成片。
+
+现在的 Galcode 是一个以 [dsh](https://github.com/deepseek-ai/deepseek-harness)（DeepSeek Harness）为主体的终端应用：裸 `galcode` 启动一个 TUI 创作台，里面是带着 Galcode 人格、技能和全套工具的 AI 导演。视频录制基于 Chromium（chrome-headless-shell + CDP）确定性逐帧渲染：动作与台词节奏和墙钟渲染耗时完全解耦，出片始终丝滑。更新记录见 [CHANGELOG.md](CHANGELOG.md)；GUI 时代（v0.1 Electron）存档见文末。
 
 第一次使用建议先看新手手册：[小白看这里](docs/小白看这里.md)。
 
@@ -174,7 +178,7 @@ Claude Desktop 配置示例（npm 全局安装后 `galcode-mcp` 在 PATH 上）�
 | `galcode_read_output` | 读取作品的 story.json、start.txt 或 README |
 | `galcode_read_log` | 读取预览任务日志或项目内其他日志 |
 
-资源：`galcode://characters`（角色表）、`galcode://assets`（素材清单摘要）、`galcode://story-schema`、`galcode://webgal-rules`、`galcode://style-guide`、`galcode://examples`、`galcode://runtime-status`。另有四个提示词模板：`galcode_write_story_json`、`galcode_revision_pass`、`galcode_fix_validation_errors`、`galcode_preview_debug`。
+资源：`galcode://characters`（角色表）、`galcode://assets`（素材清单摘要）、`galcode://story-schema`、`galcode://webgal-rules`、`galcode://style-guide`、`galcode://workflow-guardrails`（录制/预览操作防呆规则）、`galcode://examples`、`galcode://runtime-status`。另有四个提示词模板：`galcode_write_story_json`、`galcode_revision_pass`、`galcode_fix_validation_errors`、`galcode_preview_debug`。
 
 注意：MCP 服务器以自身安装目录为项目根（素材索引和 `outputs/` 都锚定在那里）。版权边界：MCP 只暴露素材元数据和运行状态，不把 Live2D SDK/runtime、官方模型、贴图等文件内容作为 resource 输出。
 
