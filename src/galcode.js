@@ -3402,7 +3402,7 @@ function escapeRegExp(value) {
 }
 
 function shortHash(value) {
-  return createHash("sha1").update(String(value)).digest("hex").slice(0, 10);
+  return createHash("sha256").update(String(value)).digest("hex").slice(0, 16);
 }
 
 function timestampSlug(mode) {
