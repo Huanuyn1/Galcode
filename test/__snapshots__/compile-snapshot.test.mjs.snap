@@ -9,15 +9,21 @@ changeBg:排练室走廊.jpg -next;
 bgm:s_Title.mp3 -volume=55 -enter=1800;
 changeFigure:anon.png -left -motion=tomori_idle01 -expression=tomori_default -next;
 changeFigure:tomori.png -right -motion=anon_idle01 -expression=anon_default -next;
-:排练开始前，走廊的灯比平时暗一点。;
-高松灯:我刚才一直在想，大家是不是都在等一个不会说出口的答案。;
-千早爱音:那种答案，一说出口就会变得很重吧。;
-wait:1000;
+:排练开始前，走廊的灯比平时暗一点。 -notend -next;
+wait:3000 -nobreak;
+高松灯:我刚才一直在想，大家是不是都在等一个不会说出口的答案。 -notend -next;
+wait:5000 -nobreak;
+千早爱音:那种答案，一说出口就会变得很重吧。 -notend -next;
+wait:4000 -nobreak;
+wait:1000 -nobreak;
 changeFigure:anon.png -left -motion=tomori_cry01 -expression=tomori_cry01 -next;
-高松灯:可是，不说的话，也会一直留在那里。;
+高松灯:可是，不说的话，也会一直留在那里。 -notend -next;
+wait:4000 -nobreak;
 changeFigure:tomori.png -right -motion=anon_smile01 -expression=anon_smile01 -next;
-千早爱音:那今天就先留一点点。留到下一首歌开始之前。;
-:门内传来调音的声音。没有人催促她们。;
+千早爱音:那今天就先留一点点。留到下一首歌开始之前。 -notend -next;
+wait:5000 -nobreak;
+:门内传来调音的声音。没有人催促她们。 -notend -next;
+wait:4000 -nobreak;
 bgm:none -enter=2000;
 wait:3000;
 end;
@@ -233,6 +239,8 @@ exports[`offline compile snapshot > cli yolo --offline produces the expected Web
       "endSec": 26
     }
   ],
-  "_totalDurationSec": 41
+  "_contentDurationSec": 26,
+  "_totalDurationSec": 29,
+  "_timingVersion": 2
 }"
 `;

@@ -1,6 +1,6 @@
 {
   "name": "galcode",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "AI 驱动的 MyGO/Ave Mujica WebGAL 二创工作室:dsh TUI 创作台 + 编译预览 + Chromium 确定性录制出片。",
   "keywords": [
     "webgal",

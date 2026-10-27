@@ -171,7 +171,9 @@ describe("chara pack compile", () => {
             { type: "figure", character: "爱音", assetId: charaAsset.id, position: "center", motion: "mtn_idle01_C", expression: "A05_素世/exp_smile01" },
             { type: "line", speaker: "爱音", text: "借一下素世的表情。", durationSec: 3 },
             { type: "figure", character: "爱音", assetId: charaAsset.id, position: "center", motion: "A03_乐奈/mtn_check01_L", expression: "exp_smile01" },
-            { type: "line", speaker: "爱音", text: "再借一下乐奈的动作。", durationSec: 3 }
+            { type: "line", speaker: "爱音", text: "再借一下乐奈的动作。", durationSec: 3 },
+            { type: "figure", character: "爱音", assetId: charaAsset.id, position: "center", acting: { gesture: "smile", expression: "idle", gaze: "audience" } },
+            { type: "line", speaker: "爱音", text: "用独立语义组合动作和表情。", durationSec: 3 }
           ]
         },
         {
@@ -194,6 +196,8 @@ describe("chara pack compile", () => {
       `changeFigure:${ANON_MODEL_REL} -id=gal-center -motion=mtn_idle01_C -expression=A05_素世/exp_smile01${bust} -next;`);
     expect(script).toContain(
       `changeFigure:${ANON_MODEL_REL} -id=gal-center -motion=A03_乐奈/mtn_check01_L -expression=exp_smile01${bust} -next;`);
+    expect(script).toContain(
+      `changeFigure:${ANON_MODEL_REL} -id=gal-center -motion=mtn_smile01_C -expression=exp_idle01${bust} -next;`);
     // chara 名字不做旧包的 anon_ 式前缀转换
     expect(script).not.toContain("anon_mtn_");
     expect(script).not.toContain("anon_exp_");

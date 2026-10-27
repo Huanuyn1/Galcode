@@ -107,7 +107,8 @@ function dshJsUnderNodeModules(nodeModulesDir) {
 //   POSIX:   <prefix>/bin/dsh (symlink → ../lib/node_modules/@deepseek-ai/dsh/lib/bin.js)
 //   Windows: <prefix>/dsh.cmd + <prefix>/node_modules/@deepseek-ai/dsh/...
 async function dshJsFromPathBinary(binPath) {
-  const real = await fs.realpath(binPath).catch(() => binPath);
+  const stat = await fs.lstat(binPath).catch(() => null);
+  const real = stat?.isSymbolicLink() ? await fs.realpath(binPath).catch(() => binPath) : binPath;
   if (real.endsWith(".js") && fssync.existsSync(real)) return real;
   const prefix = path.dirname(real);
   const candidates = [
@@ -145,6 +146,25 @@ function resolveNpmCliJs(execPath = process.execPath) {
   ];
   for (const candidate of candidates) {
     if (fssync.existsSync(candidate)) return path.resolve(candidate);
+  }
+
+  const pathEnv = process.env.PATH || process.env.Path || "";
+  const names = process.platform === "win32" ? ["npm.cmd", "npm.exe", "npm"] : ["npm"];
+  for (const pathDir of pathEnv.split(path.delimiter)) {
+    if (!pathDir) continue;
+    for (const name of names) {
+      const shim = path.join(pathDir, name);
+      if (!fssync.existsSync(shim)) continue;
+      const real = fssync.realpathSync(shim);
+      if (real.endsWith("npm-cli.js")) return real;
+      const prefix = path.dirname(real);
+      for (const candidate of [
+        path.join(prefix, "node_modules", "npm", "bin", "npm-cli.js"),
+        path.join(path.dirname(prefix), "lib", "node_modules", "npm", "bin", "npm-cli.js")
+      ]) {
+        if (fssync.existsSync(candidate)) return path.resolve(candidate);
+      }
+    }
   }
   return "";
 }
@@ -274,27 +294,6 @@ export function dshGalcodeBundleDir() {
   return path.join(PACKAGE_ROOT, "packages", "dsh-galcode");
 }
 
-// Same content dsh's initProfile writes; kept byte-compatible so the profile
-// looks identical whether `galcode setup` or `dsh plugin` created it.
-const PROFILE_PATCH_TEMPLATE = `# Your patch layer for this dsh profile, applied after every bundle layer:
-# a top-level YAML array of loader patch entries (id-targeted config
-# overrides, disables, and insert lists; \`!!js\` expressions allowed).
-[]
-`;
-
-const PROFILE_PNPM_WORKSPACE = `packages:
-  - .
-
-nodeLinker: hoisted
-autoInstallPeers: false
-`;
-
-function pnpmSpecForLocalDir(absoluteDir) {
-  // pnpm accepts absolute file: specs; forward slashes keep the spec valid on
-  // Windows too (C:/Users/...), where backslashes would be misparsed.
-  return `file:${absoluteDir.split(path.sep).join("/")}`;
-}
-
 export async function readProfileManifest(profileDir) {
   try {
     return JSON.parse(await fs.readFile(path.join(profileDir, "package.json"), "utf8"));
@@ -319,9 +318,9 @@ export function profileReadiness(manifest, profileDir) {
   return problems;
 }
 
-// Idempotent profile init: create/refresh $DSH_HOME/profiles/galcode, install
-// its dependencies with the pnpm bundled in this package, then verify the
-// composed configuration with `dsh --dump-config`.
+// Let dsh own profile creation, dependency installation and bundle membership.
+// Re-running `plugin add` reconciles the same packages without discarding user
+// dependencies, bundle ordering or the profile's cordis.patch.yml layer.
 export async function setupDshProfile(options = {}) {
   const home = resolveDshHome(options.dshHome);
   const profileDir = resolveProfileDir(home);
@@ -329,67 +328,25 @@ export async function setupDshProfile(options = {}) {
   log(`dsh home: ${home}`);
   log(`profile: ${profileDir}`);
 
-  await fs.mkdir(profileDir, { recursive: true });
-
-  const manifestPath = path.join(profileDir, "package.json");
-  const existing = await readProfileManifest(profileDir) ?? {};
-  const bundleSpec = pnpmSpecForLocalDir(dshGalcodeBundleDir());
-  const dependencies = {
-    ...(existing.dependencies ?? {}),
-    [DSH_TUI_PACKAGE]: DSH_TUI_VERSION,
-    [DSH_BUNDLE_PACKAGE]: bundleSpec
+  const ensureDsh = options.ensureDsh || ensureDshInstallation;
+  const dsh = options.dsh || await ensureDsh({ log });
+  const pnpmBinDir = path.join(PACKAGE_ROOT, "node_modules", ".bin");
+  const env = {
+    ...process.env,
+    DSH_HOME: home,
+    PATH: `${pnpmBinDir}${path.delimiter}${process.env.PATH || ""}`
   };
-  const previousBundles = Array.isArray(existing?.dsh?.profile?.bundles) ? existing.dsh.profile.bundles : [];
-  const bundles = [DSH_BASE_BUNDLE];
-  for (const extra of [DSH_TUI_PACKAGE, DSH_BUNDLE_PACKAGE, ...previousBundles]) {
-    if (!bundles.includes(extra)) bundles.push(extra);
-  }
-  const manifest = {
-    name: "dsh-profile-galcode",
-    private: true,
-    ...existing,
-    dependencies,
-    dsh: {
-      ...(existing.dsh ?? {}),
-      profile: {
-        ...(existing?.dsh?.profile ?? {}),
-        bundles
-      }
-    }
-  };
-  const nextText = `${JSON.stringify(manifest, null, 2)}\n`;
-  let wroteManifest = false;
-  try {
-    const current = await fs.readFile(manifestPath, "utf8");
-    wroteManifest = current !== nextText;
-  } catch {
-    wroteManifest = true;
-  }
-  if (wroteManifest) {
-    await fs.writeFile(manifestPath, nextText, "utf8");
-    log("wrote package.json");
-  } else {
-    log("package.json: up to date");
-  }
+  log("installing profile bundles with dsh plugin...");
+  const bundleSpec = `link:${dshGalcodeBundleDir().split(path.sep).join("/")}`;
+  const install = options.install ?? (() => run(process.execPath, [
+    dsh.jsPath,
+    "plugin",
+    "--profile", DSH_PROFILE_NAME,
+    "add", `${DSH_TUI_PACKAGE}@${DSH_TUI_VERSION}`, bundleSpec
+  ], { cwd: PACKAGE_ROOT, env }));
+  await install(profileDir, dsh);
 
-  const patchPath = path.join(profileDir, "cordis.patch.yml");
-  if (!fssync.existsSync(patchPath)) {
-    await fs.writeFile(patchPath, PROFILE_PATCH_TEMPLATE, "utf8");
-    log("wrote cordis.patch.yml (empty user layer)");
-  }
-  const workspacePath = path.join(profileDir, "pnpm-workspace.yaml");
-  if (!fssync.existsSync(workspacePath)) {
-    await fs.writeFile(workspacePath, PROFILE_PNPM_WORKSPACE, "utf8");
-    log("wrote pnpm-workspace.yaml");
-  }
-
-  log("installing profile dependencies with pnpm...");
-  const install = options.install ?? (() => run(process.execPath, [resolvePnpmCliJs(), "install"], {
-    cwd: profileDir,
-    env: { ...process.env, DSH_HOME: home }
-  }));
-  await install(profileDir);
-
+  const manifest = await readProfileManifest(profileDir);
   const problems = profileReadiness(manifest, profileDir);
   if (problems.length > 0) {
     throw new Error(`profile install incomplete: ${problems.join("; ")}`);
@@ -397,10 +354,9 @@ export async function setupDshProfile(options = {}) {
 
   log("verifying composed configuration (dsh --dump-config)...");
   const verify = options.verify ?? (async () => {
-    const dsh = await ensureDshInstallation({ log });
     const dump = await collectOutput(process.execPath, [dsh.jsPath, "--profile", DSH_PROFILE_NAME, "--dump-config"], {
       cwd: profileDir,
-      env: { ...process.env, DSH_HOME: home, GALCODE_MCP_SERVER: galcodeMcpServerPath() }
+      env: { ...env, GALCODE_MCP_SERVER: galcodeMcpServerPath() }
     });
     const requiredRows = ["mcp-galcode", "preset-galcode", "@deepseek-ai/dsh-mcp-client", "@deepseek-ai/dsh-agent-preset", DSH_TUI_PACKAGE, DSH_BUNDLE_PACKAGE];
     const missing = requiredRows.filter((needle) => !dump.includes(needle));

@@ -53,7 +53,7 @@ function sanitizeStory(story) {
     if (bgm.assetPath) bgm.assetPath = "<ASSETS>/bgm/" + bgm.assetName;
     delete bgm._copiedPath;
   }
-  return JSON.stringify(clone, null, 2).replace(/-[0-9a-f]{10}\b/g, "-<HASH>");
+  return JSON.stringify(clone, null, 2).replace(/-[0-9a-f]{16}\b/g, "-<HASH>");
 }
 
 afterAll(() => {

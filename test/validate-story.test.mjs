@@ -40,7 +40,7 @@ const manifest = {
 function validStory() {
   return {
     title: "雨后还要继续",
-    durationSec: 30,
+    durationSec: 9,
     characters: ["高松灯"],
     scenes: [
       {
@@ -226,5 +226,11 @@ describe("validateStory (galcode_validate_story rules)", () => {
     const result = validateStory(story, manifest);
     expect(result.errors).toHaveLength(0);
     expect(result.warnings.some((warning) => warning.includes("title"))).toBe(true);
+  });
+
+  it("warns when the LLM target disagrees with the computed timeline", () => {
+    const story = { ...validStory(), durationSec: 90 };
+    const result = validateStory(story, manifest);
+    expect(result.warnings.some((warning) => warning.includes("timeline is authoritative"))).toBe(true);
   });
 });

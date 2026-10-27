@@ -8,6 +8,8 @@ import { fileURLToPath } from "node:url";
 import { killChildTree } from "../proc.mjs";
 import { recorderBrowserStatus } from "../recorder/browser.mjs";
 import { probeCubismCoreGeneration } from "../live2d-compat.mjs";
+import { resolveLive2DFigure, summarizeDirecting } from "../live2d-directing.mjs";
+import { buildStoryTiming } from "../story-timing.mjs";
 
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const GALCODE_BIN = path.join(ROOT_DIR, "bin", "galcode.js");
@@ -27,61 +29,131 @@ const CHARACTER_CATALOG = [
     key: "tomori",
     displayName: "高松灯",
     aliases: ["高松灯", "灯", "Tomori"],
-    writingNotes: "Soft-spoken, intensely sincere, drawn to words and small emotional signals. Best used for quiet pressure, fragile courage, and confessions that arrive slowly."
+    writingNotes: "Soft-spoken, intensely sincere, drawn to words and small emotional signals. Best used for quiet pressure, fragile courage, and confessions that arrive slowly.",
+    profile: {
+      voice: "短句、停顿和具体物象比流畅陈词更重要；她用捡拾、歌词和笨拙比喻逼近感受。",
+      want: "想被接纳，也想把无法直接说出口的心意真正传达给别人。",
+      defense: "退缩、沉默、把责任揽到自己身上；鼓足勇气时才突然说得极直。",
+      relationships: "爱音的主动能让她敢迈出一步；立希的保护既让她安心也可能替她说过头。",
+      avoid: "不要写成只会哭泣的沉默道具，也不要让她突然变成能言善辩的气氛担当。"
+    }
   },
   {
     key: "anon",
     displayName: "千早爱音",
     aliases: ["千早爱音", "爱音", "Anon"],
-    writingNotes: "Social, restless, prideful but not shallow. Useful for scenes where a bright tone hides insecurity, apology, or the need to keep moving."
+    writingNotes: "Social, restless, prideful but not shallow. Useful for scenes where a bright tone hides insecurity, apology, or the need to keep moving.",
+    profile: {
+      voice: "语速快、会自嘲和撑场面，越在意越容易用轻松话题包装真实需求。",
+      want: "想被看见、被需要，并证明自己不是只能随波逐流的人。",
+      defense: "虚荣、逃避和故作轻松背后是不安；真正的成长发生在她承认受伤后仍愿意留下。",
+      relationships: "她对灯的直率既心疼又着急；与立希互呛不代表没有信任；会察觉素世客套里的距离。",
+      avoid: "不要简化成社牛、爱慕虚荣或无休止撒娇，她的明亮必须有敏感和自尊作支撑。"
+    }
   },
   {
     key: "soyo",
     displayName: "长崎爽世",
     aliases: ["长崎爽世", "爽世", "Soyo"],
-    writingNotes: "Polite and composed on the surface, careful with distance and control. Works well for subtext, elegant avoidance, and conversations with a sting."
+    writingNotes: "Polite and composed on the surface, careful with distance and control. Works well for subtext, elegant avoidance, and conversations with a sting.",
+    profile: {
+      voice: "礼貌、完整、留有余地；真正的刺藏在措辞过度得体和突然不再解释的瞬间。",
+      want: "渴望稳定且不会被抛下的归属，也在学习接受关系无法靠维系旧形状来保存。",
+      defense: "控制距离、照顾所有人、用过去替代当下；被戳穿时先冷下来而非立刻坦白。",
+      relationships: "与爱音的熟稔常带试探；对立希的直接会有摩擦；旧乐队记忆影响她的判断但不是全部人格。",
+      avoid: "不要写成天生腹黑的反派，也不要用一次道歉抹平她的戒备和复杂。"
+    }
   },
   {
     key: "taki",
     displayName: "椎名立希",
     aliases: ["椎名立希", "立希", "Taki"],
-    writingNotes: "Blunt, disciplined, protective, easily irritated when things drift. Strong for rhythm, confrontation, and practical emotional care."
+    writingNotes: "Blunt, disciplined, protective, easily irritated when things drift. Strong for rhythm, confrontation, and practical emotional care.",
+    profile: {
+      voice: "直接、短促、先谈问题和行动；不擅长把关心包装成好听的话。",
+      want: "想把音乐和责任做好，并保护那些她承认自己真正在意的人。",
+      defense: "用严厉和不耐烦掩盖笨拙与自我要求，受伤时更容易先推开别人。",
+      relationships: "对灯的保护欲强但也需要学习尊重其主体性；与爱音互呛是磨合方式；对乐队并非只有义务。",
+      avoid: "不要把她写成持续发怒的压场工具，严厉之后要能看见责任和关心。"
+    }
   },
   {
     key: "rana",
     displayName: "要乐奈",
     aliases: ["要乐奈", "乐奈", "Rana"],
-    writingNotes: "Instinctive, concise, independent. Best used as a strange clear note in a scene, changing the emotional weather with one simple line."
+    writingNotes: "Instinctive, concise, independent. Best used as a strange clear note in a scene, changing the emotional weather with one simple line.",
+    profile: {
+      voice: "极简、凭直觉行动，常用具体需要或一句看似离题的话切中局势。",
+      want: "寻找有趣、自在且能继续弹吉他的地方。",
+      defense: "不被常规社交脚本束缚，但不等于没有观察力或情感。",
+      relationships: "她可以被别人的执念吸引，却不会替任何人承担说教或调解任务。",
+      avoid: "不要只写猫、抹茶芭菲和随机出没；每次插话都应改变节奏或暴露真相。"
+    }
   },
   {
     key: "sakiko",
     displayName: "丰川祥子",
     aliases: ["丰川祥子", "祥子", "Sakiko"],
-    writingNotes: "Formal, theatrical, burdened by pride and obligation. Useful for high-tension restraint, grandeur, and carefully chosen cracks."
+    writingNotes: "Formal, theatrical, burdened by pride and obligation. Useful for high-tension restraint, grandeur, and carefully chosen cracks.",
+    profile: {
+      voice: "正式、克制、带舞台感；越脆弱越可能把话说得决绝和完整。",
+      want: "想守住选择、尊严和亲手建立的世界，同时难以承认自己也渴望被理解。",
+      defense: "用责任、身份和冷硬边界遮住无力感；破防往往藏在极短的迟疑而非长篇自白。",
+      relationships: "与旧友的距离同时包含亏欠、保护和自尊；与合作者可以真诚投入但不容许失去掌控。",
+      avoid: "不要写成单纯冷酷的掌权者，也不要轻易用他人一句安慰解决她的处境。"
+    }
   },
   {
     key: "mutsumi",
     displayName: "若叶睦",
     aliases: ["若叶睦", "睦", "Mutsumi"],
-    writingNotes: "Quiet, literal, difficult to read, often emotionally decisive in understated ways. Good for pauses, simple truths, and uneasy loyalty."
+    writingNotes: "Quiet, literal, difficult to read, often emotionally decisive in understated ways. Good for pauses, simple truths, and uneasy loyalty.",
+    profile: {
+      voice: "简短、字面、反应不循常规；重要决定常常只由一个小动作或一句话显现。",
+      want: "想让自己的感受和选择被看见，而不是一直作为别人期待的容器。",
+      defense: "沉默和顺从可能同时是自我保护与挣扎，不应被解释成绝对空白。",
+      relationships: "她会忠诚，也可能在关键时刻作出出人意料的独立选择；不要替她把动机说满。",
+      avoid: "不要写成没有情绪的木偶或纯粹谜语人，保留具体、可感知的心理重量。"
+    }
   },
   {
     key: "uika",
     displayName: "三角初华",
     aliases: ["三角初华", "初华", "Uika"],
-    writingNotes: "Gentle, public-facing, skilled at smoothing the room while carrying private tension. Fits mediator roles and warm but conflicted scenes."
+    writingNotes: "Gentle, public-facing, skilled at smoothing the room while carrying private tension. Fits mediator roles and warm but conflicted scenes.",
+    profile: {
+      voice: "温和、体贴、善于接住别人的话，真正在意时反而更谨慎。",
+      want: "想维持关系与共同舞台，也想确认自己的位置不是只靠体贴换来。",
+      defense: "先平滑冲突、把私人压力藏起来，偶尔才露出执着和不安。",
+      relationships: "她能理解不同立场，却不应自动成为无私调解者；亲密关系中的期待需要被正面处理。",
+      avoid: "不要写成永远正确的温柔圣人，也不要让执着毫无铺垫地变成控制欲。"
+    }
   },
   {
     key: "umiri",
     displayName: "八幡海铃",
     aliases: ["八幡海铃", "海铃", "海玲", "Umiri"],
-    writingNotes: "Cool, observant, professional, often direct without being loud. Useful for grounding a dramatic scene with sharp clarity."
+    writingNotes: "Cool, observant, professional, often direct without being loud. Useful for grounding a dramatic scene with sharp clarity.",
+    profile: {
+      voice: "冷静、精准、少说废话，常用事实和可执行的下一步表达立场。",
+      want: "想找到值得投入并能相互信任的关系，而不只是完成专业任务。",
+      defense: "用职业距离保护自己，先观察再投入；在乎时不一定提高音量。",
+      relationships: "她能给锋利建议也能尊重边界，与他人建立信任需要具体共同经历。",
+      avoid: "不要写成全知全能或无感情的吐槽机器，冷静之下要有选择和偏向。"
+    }
   },
   {
     key: "nyamu",
     displayName: "祐天寺若麦",
     aliases: ["祐天寺若麦", "若麦", "喵梦", "Nyamu"],
-    writingNotes: "Playful, performative, internet-aware, but not only comic relief. Good for breaking tension or making hidden motives visible."
+    writingNotes: "Playful, performative, internet-aware, but not only comic relief. Good for breaking tension or making hidden motives visible.",
+    profile: {
+      voice: "轻快、外向、懂镜头和流量语言，常用玩笑试探别人的底线。",
+      want: "想获得认可并让野心得到回报，不愿自己的努力被当成轻浮。",
+      defense: "把真实渴望藏在表演和调侃里，局势不利时先掌握叙事权。",
+      relationships: "她会挑衅权威也会观察同伴反应；搞笑和算计之外要保留对舞台与认可的认真。",
+      avoid: "不要只写成吵闹网红或纯粹利己者，她的大胆必须伴随真实代价。"
+    }
   },
   {
     key: "mahoro",
@@ -183,12 +255,23 @@ const CHARA_SHARED_NAME_PATTERN = /^(00|[ABCD]\d{2})_[^/]+\/.+/;
 const STORY_SCHEMA = {
   title: "string",
   description: "string",
-  durationSec: "number",
+  durationSec: "number, creative target only; compiled timeline is authoritative",
   characters: ["string"],
+  direction: {
+    premise: "optional but recommended: concrete situation and dramatic question",
+    characterArcs: [{ character: "name", want: "external goal", need: "internal need", defense: "coping pattern", change: "visible change by the ending" }]
+  },
   scenes: [
     {
       id: "string",
       title: "string",
+      direction: {
+        pov: "whose experience anchors the scene",
+        goal: "what the POV character tries to achieve",
+        obstacle: "what makes the goal difficult",
+        turn: "new information, decision or emotional reversal",
+        exitState: "relationship/emotional state carried into the next scene"
+      },
       backgroundAssetId: "asset id from galcode://assets, optional",
       bgmAssetId: "asset id from galcode://assets, optional",
       actions: [
@@ -197,12 +280,20 @@ const STORY_SCHEMA = {
           character: "string, or 'none' to clear a position",
           assetId: "asset id from manifest, required unless character is none",
           position: "left|center|right",
-          motion: "Live2D motion name, required for Live2D assets. chara pack: native name like mtn_smile01_C, or cross-character 前缀_角色/名 like A05_素世/mtn_smile01_C",
-          expression: "Live2D expression name, required for Live2D assets. chara pack: native name like exp_smile01, or cross-character like A05_素世/exp_smile01",
+          acting: {
+            gesture: "optional semantic body action such as denial, nod, look, smile",
+            emotion: "optional semantic fallback for motion and expression",
+            expression: "optional independent facial emotion such as shy, sad, smile",
+            gaze: "audience|left|right; _L faces screen-right and _R faces screen-left",
+            intensity: "low|medium|high or 0..1",
+            allowShared: "optional boolean; cross-character actions require explicit opt-in and >=75% parameter coverage"
+          },
+          motion: "exact Live2D motion ID; overrides acting.gesture. Required only when no acting is supplied",
+          expression: "exact Live2D expression ID; overrides acting.expression. Required only when no acting is supplied",
           transform: "optional framing override for Live2D figures: { x, y, scale } (stage px from center; default bust shot is scale 1.9, y 505, x ∓200 by position)"
         },
-        { type: "line", speaker: "string", text: "string", durationSec: "number" },
-        { type: "narration", text: "string", durationSec: "number" },
+        { type: "line", speaker: "string", text: "string", subtext: "optional hidden intention or emotional beat", durationSec: "number; omit for deterministic reading-time estimate" },
+        { type: "narration", text: "string", subtext: "optional narrative purpose", durationSec: "number; omit for deterministic reading-time estimate" },
         { type: "wait", durationSec: "number" }
       ]
     }
@@ -634,9 +725,12 @@ function getPrompt(name, args) {
             type: "text",
             text: [
               "You are writing a Galcode story JSON for a non-commercial fan work.",
-              "First read galcode://characters, galcode://assets, galcode://story-schema, galcode://webgal-rules, and galcode://workflow-guardrails.",
+              "First read galcode://characters (including profile/avoid), galcode://assets (including directing capabilities), galcode://story-schema, galcode://webgal-rules, and galcode://workflow-guardrails.",
               `User idea: ${args.idea || ""}`,
-              `Target duration: ${args.durationSec || 60} seconds.`,
+              `Target duration: ${args.durationSec || 60} seconds; this is a creative target, not a value to force by guessing line timings.`,
+              "Design before drafting: fill top-level direction.characterArcs and every scene.direction with a specific goal, obstacle, turn and exitState. Each scene must change what at least one character knows, wants or chooses.",
+              "Draft with subtext on important lines and semantic acting on chara figures. Keep gesture and facial expression independent when their contrast reveals subtext. Do not invent raw action IDs or borrow across characters without explicit shared coverage.",
+              "Before returning, revise once for causality, each character's voice and avoid list, entry/exit emotional continuity, repetitive dialogue/motions, and the difference between spoken text and subtext.",
               "Use only asset ids that exist in galcode://assets. Return only valid JSON matching galcode://story-schema."
             ].join("\n")
           }
@@ -645,7 +739,7 @@ function getPrompt(name, args) {
     };
   }
   if (name === "galcode_revision_pass") {
-    return promptText("Revise the current Galcode story JSON using the feedback below. Preserve valid asset ids unless a replacement is necessary. Return only the updated JSON.", args.feedback || "");
+    return promptText("Revise the current Galcode story JSON using the feedback below. Recheck scene goals/obstacles/turns/exit states, character voice and avoid constraints, line subtext, and semantic acting continuity. Preserve valid asset ids unless a replacement is necessary. Return only the updated JSON.", args.feedback || "");
   }
   if (name === "galcode_fix_validation_errors") {
     return promptText("Fix the Galcode story JSON according to these validation errors. Prefer changing invalid asset ids/actions over changing the user's story intent. Return only JSON.", args.errors || "");
@@ -1110,23 +1204,25 @@ export function validateStory(story, manifest) {
         }
         occupied.set(action.position, action.character);
         if (asset.kind === "live2d") {
-          if (!action.motion) errors.push(`${label}.motion is required for Live2D asset ${asset.id}.`);
-          if (!action.expression) errors.push(`${label}.expression is required for Live2D asset ${asset.id}.`);
-          for (const [field, listed] of [["motion", asset.motions], ["expression", asset.expressions]]) {
-            const value = action[field];
-            if (!value || !Array.isArray(listed) || !listed.length || listed.includes(value)) continue;
-            if (asset.pack === "chara") {
-              if (value.includes("/")) {
-                // chara 包的跨角色名字必须带完整前缀(00_/A01_…D05_);命中前缀即可用,
-                // 清单里只存原生裸名,所以不在这里核对共享库名单。
+          if (!action.motion && !action.acting) errors.push(`${label}.motion or acting is required for Live2D asset ${asset.id}.`);
+          if (!action.expression && !action.acting) errors.push(`${label}.expression or acting is required for Live2D asset ${asset.id}.`);
+          if (asset.pack === "chara" && asset.directing) {
+            try {
+              resolveLive2DFigure(action, asset);
+            } catch (error) {
+              errors.push(`${label}: ${error.message}`);
+            }
+          } else {
+            for (const [field, listed] of [["motion", asset.motions], ["expression", asset.expressions]]) {
+              const value = action[field];
+              if (!value || !Array.isArray(listed) || !listed.length || listed.includes(value)) continue;
+              if (asset.pack === "chara" && value.includes("/")) {
                 if (!CHARA_SHARED_NAME_PATTERN.test(value)) {
                   errors.push(`${label}.${field} '${value}' uses a cross-character name without the required prefix (expected like A05_素世/exp_smile01).`);
                 }
               } else {
                 warnings.push(`${label}.${field} '${value}' is not listed on asset ${asset.id}.`);
               }
-            } else {
-              warnings.push(`${label}.${field} '${value}' is not listed on asset ${asset.id}.`);
             }
           }
         }
@@ -1142,6 +1238,15 @@ export function validateStory(story, manifest) {
       }
     }
   });
+  const targetDuration = Number(story.durationSec);
+  const hasDialogue = story.scenes.some((scene) => (scene.actions || []).some((action) => action?.type === "line" || action?.type === "narration"));
+  if (hasDialogue && Number.isFinite(targetDuration) && targetDuration > 0) {
+    const timing = buildStoryTiming(story);
+    const tolerance = Math.max(3, timing.totalDurationSec * 0.15);
+    if (Math.abs(targetDuration - timing.totalDurationSec) > tolerance) {
+      warnings.push(`durationSec target ${targetDuration}s differs from the computed recording timeline ${timing.totalDurationSec.toFixed(1)}s; the timeline is authoritative.`);
+    }
+  }
   return { errors, warnings };
 }
 
@@ -1208,6 +1313,7 @@ async function assetSummary() {
         sharedMotions: asset.sharedMotions || 0,
         sharedExpressions: asset.sharedExpressions || 0
       } : {}),
+      ...(asset.directing ? { directing: summarizeDirecting(asset) } : {}),
       live2dVersion: asset.live2dVersion
     })),
     characterGuide: buildCharacterGuide(assets)
@@ -1236,9 +1342,10 @@ function buildCharacterGuide(assets) {
         name: asset.name,
         motions: (asset.motions || []).slice(0, 12),
         expressions: (asset.expressions || []).slice(0, 12),
+        ...(asset.directing ? { directing: summarizeDirecting(asset) } : {}),
         relativePath: asset.relativePath
       }));
-    return { key: character.key, displayName: character.displayName, aliases: character.aliases, writingNotes: character.writingNotes, live2d };
+    return { key: character.key, displayName: character.displayName, aliases: character.aliases, writingNotes: character.writingNotes, ...(character.profile ? { profile: character.profile } : {}), live2d };
   });
 }
 

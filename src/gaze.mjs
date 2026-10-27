@@ -100,6 +100,7 @@ export function applyGazeDirection(story, manifest, { canonicalCharacterKey, isC
             base: parsed?.base || "",
             suffix: parsed?.suffix || "",
             expression: String(action.expression || ""),
+            explicitDirection: Boolean(action.acting?.gaze),
             authoredBeat: beat
           });
         }
@@ -154,11 +155,11 @@ export function applyGazeDirection(story, manifest, { canonicalCharacterKey, isC
           }
         }
 
-        if (speakerEntry && speakerEntry.asset && isCharaLive2DAsset(speakerEntry.asset)
+        if (speakerEntry && !speakerEntry.explicitDirection && speakerEntry.asset && isCharaLive2DAsset(speakerEntry.asset)
           && speakerEntry.suffix && IDLE_FAMILY.has(speakerEntry.base) && speakerEntry.suffix !== "C"
           && variantExists(speakerEntry, speakerEntry.base, "C")) {
           insertMotion(speakerEntry, speakerPos, speakerEntry.base, "C", "speakerTurns");
-        } else if (speakerEntry && speakerEntry.asset && isCharaLive2DAsset(speakerEntry.asset)
+        } else if (speakerEntry && !speakerEntry.explicitDirection && speakerEntry.asset && isCharaLive2DAsset(speakerEntry.asset)
           && speakerEntry.suffix && IDLE_FAMILY.has(speakerEntry.base) && speakerEntry.suffix !== "C") {
           summary.skippedMissingVariant += 1;
         }

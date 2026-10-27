@@ -10,6 +10,7 @@ import {
   ensureRecorderBrowser,
   recorderBrowserStatus,
   launchArgsForMode,
+  launchRecorderBrowser,
   deterministicLaunchArgs
 } from "../src/recorder/browser.mjs";
 
@@ -205,6 +206,30 @@ describe("launch args", () => {
     for (const flag of deterministicLaunchArgs()) expect(deterministic).toContain(flag);
     expect(deterministic.join(" ")).toContain("--enable-begin-frame-control");
     expect(deterministic.join(" ")).toContain("--deterministic-mode");
+  });
+
+  it("falls back to software rendering args when hardware launch fails", async () => {
+    const previous = process.env.GALCODE_GPU;
+    process.env.GALCODE_GPU = "metal";
+    const calls = [];
+    try {
+      await launchRecorderBrowser({
+        executablePath: "/fake/chrome",
+        mode: "realtime",
+        launchImpl: async (_exe, args) => {
+          calls.push(args);
+          if (calls.length === 1) throw new Error("simulated unavailable Metal driver");
+          return { ok: true };
+        }
+      });
+    } finally {
+      if (previous === undefined) delete process.env.GALCODE_GPU;
+      else process.env.GALCODE_GPU = previous;
+    }
+    expect(calls).toHaveLength(2);
+    expect(calls[0]).toContain("--use-angle=metal");
+    expect(calls[1]).not.toContain("--use-angle=metal");
+    expect(calls[1]).toContain("--enable-unsafe-swiftshader");
   });
 });
 

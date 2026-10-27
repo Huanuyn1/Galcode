@@ -50,3 +50,12 @@ This package contains no runtime code; everything is declarative YAML plus
 skill markdown. It is shipped inside the `galcode` npm package
 (`packages/dsh-galcode`) and installed into the dsh profile from that local
 path — it is not published to npm on its own.
+
+Installation and bundle membership are owned by the official command:
+
+```bash
+dsh plugin --profile galcode add /path/to/Galcode/packages/dsh-galcode
+```
+
+The manifest declares the supported runtime through `engines.dsh`; the ordered
+`dsh.bundle.patch` files contribute the host and preset layers.

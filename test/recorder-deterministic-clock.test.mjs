@@ -6,6 +6,7 @@ import {
   closeBrowserTree
 } from "../src/recorder/browser.mjs";
 import { installVirtualClock } from "../src/recorder/webgal-page.mjs";
+import { installExternalFrameClock } from "../src/recorder/vt-policy.mjs";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -44,14 +45,16 @@ describe("deterministic unified virtual clock", () => {
     }
     const manifest = JSON.parse(await fs.readFile(path.join(recorderCacheDir(), "manifest.json"), "utf8"));
     const executablePath = path.join(recorderCacheDir(), manifest.executablePath);
+    const externalClock = manifest.deterministicDriver === "vt-policy";
     const fps = 30;
     const frameMs = 1000 / fps;
     const frames = 90; // 3s virtual
 
-    const browser = await launchRecorderBrowser({ executablePath, mode: "deterministic", width: 640, height: 360 });
+    const browser = await launchRecorderBrowser({ executablePath, mode: externalClock ? "realtime" : "deterministic", width: 640, height: 360 });
     try {
       const page = await browser.newPage();
-      await installVirtualClock(page, frameMs);
+      if (externalClock) await installExternalFrameClock(page, frameMs);
+      else await installVirtualClock(page, frameMs);
       await page.goto(PAGE, { waitUntil: "domcontentloaded", timeout: 30000 });
       const session = await page.createCDPSession();
       const wallStart = Date.now();
@@ -59,7 +62,8 @@ describe("deterministic unified virtual clock", () => {
       // occasionally coalesce with the previous one and skip an rAF tick; pump
       // until we have enough samples instead of asserting on pump count.
       for (let pumped = 0; pumped < frames * 2; pumped += 1) {
-        await session.send("HeadlessExperimental.beginFrame", { interval: frameMs, noDisplayUpdates: true });
+        if (externalClock) await page.evaluate(() => window.__galcodeTickFrame());
+        else await session.send("HeadlessExperimental.beginFrame", { interval: frameMs, noDisplayUpdates: true });
         const count = await page.evaluate(() => window.__samples?.length ?? 0);
         if (count >= frames) break;
       }

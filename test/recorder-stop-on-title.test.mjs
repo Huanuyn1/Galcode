@@ -10,6 +10,7 @@ import {
   closeBrowserTree
 } from "../src/recorder/browser.mjs";
 import { recordDeterministic } from "../src/recorder/deterministic.mjs";
+import { recordVtPolicy } from "../src/recorder/vt-policy.mjs";
 import { commandExists } from "../src/recorder/ffmpeg.mjs";
 
 // Deterministic --stop-on-title: a title screen appearing mid-recording ends
@@ -41,13 +42,15 @@ describe("deterministic --stop-on-title", () => {
 
     const manifest = JSON.parse(await fs.readFile(path.join(recorderCacheDir(), "manifest.json"), "utf8"));
     const executablePath = path.join(recorderCacheDir(), manifest.executablePath);
+    const externalClock = manifest.deterministicDriver === "vt-policy";
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "galcode-stop-title-"));
     const out = path.join(tmp, "stop.mp4");
     const fps = 30;
-    const browser = await launchRecorderBrowser({ executablePath, mode: "deterministic", width: 320, height: 180 });
+    const browser = await launchRecorderBrowser({ executablePath, mode: externalClock ? "realtime" : "deterministic", width: 320, height: 180 });
     let stats;
     try {
-      stats = await recordDeterministic({
+      const record = externalClock ? recordVtPolicy : recordDeterministic;
+      stats = await record({
         browser,
         url: PAGE,
         out,
@@ -58,6 +61,7 @@ describe("deterministic --stop-on-title", () => {
         sceneDelayMs: 500,
         stopOnTitle: true,
         autoAdvanceSec: 9999,
+        autoAdvanceIntervalMs: 9999000,
         log: () => {}
       });
     } finally {

@@ -1,7 +1,7 @@
 ---
 name: live2d-directing
-description: chara 新版 Live2D 包(figure/chara/,Cubism 3/4)的演出指南 — 模型路径约定、原生与跨角色动作/表情命名规则、A01-D05 前缀表、情绪→动作对照。给 figure 动作选 motion/expression 前必读。
-whenToUse: story JSON 中出现 pack='chara' 的 Live2D 模型,或需要为 figure 动作挑选 motion/expression、跨角色借用表情动作时。
+description: chara 新版 Live2D 包(figure/chara/,Cubism 3/4)的演出指南 — 语义 acting、真实能力目录、独立动作/表情、朝向与跨角色覆盖校验。给 figure 编动作前必读。
+whenToUse: story JSON 中出现 pack='chara' 的 Live2D 模型,或需要编写语义 acting、精确 motion/expression、跨角色借用表情动作时。
 ---
 
 # Live2D 演出指南(chara 包)
@@ -9,7 +9,38 @@ whenToUse: story JSON 中出现 pack='chara' 的 Live2D 模型,或需要为 figu
 chara 包是现在的主力 Live2D 资产(Cubism 3/4,25 个主要角色 + sub_* 配角)。
 素材清单里 `pack: "chara"` 的模型适用本页规则;旧包(`anon_idle01` 式命名)规则不同,不要混用。
 
-## 运行时要求(先读这个,排查"模型不出来")
+## 首选:语义 acting,不猜文件名
+
+每个 chara 模型在 `galcode://assets` 中都有 `directing` 能力目录。索引器读取 `.model3.json`、`.cdi3.json`、动作曲线和表情参数,提供 motionFamilies/expressionFamilies、变体、朝向、驱动区域和共享动作族。
+
+```json
+{
+  "type": "figure",
+  "character": "千早爱音",
+  "assetId": "<她自己的模型 id>",
+  "position": "left",
+  "acting": {
+    "gesture": "denial",
+    "expression": "shy",
+    "gaze": "right",
+    "intensity": "medium"
+  }
+}
+```
+
+- `gesture`:身体动作族;`expression`:独立面部情绪。两者可以相反,用反差演出潜台词。
+- `emotion`:两者的共同回退;只给情绪时,程序分别选动作和表情。
+- `gaze`:`audience|left|right`。程序知道 `_L` 朝屏幕右、`_R` 朝屏幕左,不要手写后缀猜方向。
+- `intensity`:`low|medium|high` 或 0..1,只选真实存在的 01/02/03 变体。
+- 编译器优先原生、朝向匹配且覆盖率至少 75% 的动作;无法解析时校验器列出真实可用家庭,不会像写错文件名那样静默失效。
+- 精确 `motion`/`expression` ID 仍可覆盖对应语义,用于复现特定动作;没有 acting 时两者仍必填。
+- 动作服务于台词 subtext、注意力和关系变化,不要按句数机械换动作,也不要整场只用 idle。
+
+### 跨角色动作
+
+默认 `allowShared=false`。只有剧情确实需要某个其他角色的标志性动作时才设 `allowShared=true`;编译器同时检查注册名与目标模型参数覆盖率。低于 75% 不进入语义候选,低于 50% 的精确引用直接报错。不要为了“可玩性”绕过这些约束。
+
+## 运行时要求(排查"模型不出来")
 
 - chara 包的模型是 **Cubism 5 格式**(.moc3 文件格式版本 v5),WebGAL 引擎里的
   `live2dcubismcore.min.js` 必须是 **Cubism 5 的核心**(官方 Cubism 5 SDK for Web)。
@@ -41,7 +72,7 @@ chara/<角色>/<服装>/<file>.model3.json
   **前缀必须完整** — 写 `素世/exp_smile01`、`阿拉蕾/…` 都找不到文件。
 - **00_ 前缀**:`00_<角色>/<名>` 指"模型自己",如 `00_爱音/exp_shy03`(只在爱音自己的模型上有效)。
   与裸名等价,通常直接用裸名即可。
-- 绝对不要编造名字;名字原样写入脚本,写错就静默失效。
+- 绝对不要编造名字;带能力目录的 chara 资产会在校验阶段拒绝未注册名字,不再静默放行。
 
 ### 前缀对照表
 

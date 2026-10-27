@@ -157,6 +157,14 @@ describe("applyGazeDirection v2", () => {
     expect(motionsOf(s, "椎名立希")).toEqual(["mtn_idle01_R", "mtn_idle01_C"]); // no turn/nod inserted
   });
 
+  it("preserves a speaker's explicit semantic gaze", () => {
+    const directed = { ...fig("千早爱音", "anon", "left", "mtn_idle01_L"), acting: { gesture: "idle", gaze: "right" } };
+    const s = storyOf([directed, line("千早爱音")]);
+    const summary = applyGazeDirection(s, manifestWith({ anon: FULL }), deps);
+    expect(summary.speakerTurns).toBe(0);
+    expect(motionsOf(s, "千早爱音")).toEqual(["mtn_idle01_L"]);
+  });
+
   it("turns the idle speaker to the audience (_C), preserves expressive speaker motion", () => {
     const s = storyOf([
       fig("千早爱音", "anon", "left", "mtn_idle01_L"),

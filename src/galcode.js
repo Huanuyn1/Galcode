@@ -13,6 +13,8 @@ import { recordProject } from "./recorder/index.mjs";
 import { checkLive2DCompat } from "./live2d-compat.mjs";
 import { ensurePixiLive2DPatch } from "./live2d-lib-patch.mjs";
 import { applyGazeDirection } from "./gaze.mjs";
+import { inspectCharaDirecting, resolveLive2DFigure, summarizeDirecting } from "./live2d-directing.mjs";
+import { applyStoryTiming, timedActionMs } from "./story-timing.mjs";
 import { readGalcodeVersion } from "./dsh-profile.mjs";
 
 // Cross-platform helpers.  Code is shared across macOS / Linux / Windows;
@@ -147,6 +149,8 @@ function isProjectRoot(dir) {
 const DEFAULT_WRITER_PROMPT = [
   "你是 Galcode 引擎的 AI 编剧/导演，负责将创作讨论的结果编译为完整的 WebGAL 故事 JSON。",
   "",
+  "先设计再写台词：顶层 direction 写 premise 和 characterArcs(want/need/defense/change)；每场 scene.direction 写 pov/goal/obstacle/turn/exitState。",
+  "每场必须让人物的信息、欲望或选择发生实际变化，exitState 必须被下一场继承；重要 line 写 subtext，正式输出前复核因果、人物声音、重复解释和情绪连续性。",
   "编译系统按以下顺序执行动作：changeBg（切换背景）→ bgm（背景音乐）→ changeFigure（立绘/角色）→ line（对话）→ narration（旁白）→ wait（停顿）→ end（结束）。",
   "不要编造不存在的 WebGAL 命令，除非明确要求否则不要输出原始 .txt 脚本。",
   "",
@@ -180,52 +184,16 @@ const DEFAULT_WRITER_PROMPT = [
   "- 绝对不要让同一个角色出现在多个站位上",
   "- 角色的站位在整个场景中应保持一致，不要中途换位（如需换位，先移除再重新引入）",
   "",
-  "=== 动作与表情（motion / expression — 极其重要）===",
-  "每个 figure 动作必须同时带有 motion 和 expression。只能从角色资产指南（characterAssetGuide）里选择。",
-  "",
-  "【关键：禁止千篇一律的 idle01！】",
-  "idle01 只是静态站立动作。从头到尾全用 idle01 会让画面完全僵死，毫无表现力。",
-  "你必须根据每句台词的具体情绪，从可用动作列表中挑选最匹配的 motion。",
-  "",
-  "动作选择原则：",
-  "- 每 2-3 句台词至少有一次 motion 变化",
-  "- 情绪强烈的台词（哭泣、愤怒、大笑、惊讶）必须换对应的 motion",
-  "- idle01 仅限真正的日常平淡时刻，全场景最多用 1-2 次",
-  "- 一个 5-8 句台词的场景中，至少使用 3-4 种不同的 motion",
-  "",
-  "常见情绪 → motion / expression 对照（优先使用非 idle 的动作）：",
-  "  开心/微笑：smile01 / smile01      认真/紧张：serious01 / serious01     悲伤/哭泣：cry01 / cry01",
-  "  生气/不悦：angry01 / angry01      惊讶：idle01（仅此情况）/ surprised  道别：bye01 / default",
-  "  思考/迷茫：nf01 / default         日常/平静：idle01 / default（尽量少用）",
-  "",
-  "示例 — 正确的情绪驱动动作变化（灯，4 句台词）：",
-  "  引入：motion:'nf01'（迷茫不安地站着）",
-  "  被质问：motion:'serious01'（紧张回应）→ 与上一句不同！",
-  "  崩溃：motion:'cry01'（哭泣）→ 再次变化！",
-  "  和解：motion:'smile01'（微笑）→ 情绪弧线完整！",
-  "",
-  "同场景中切换情绪：发送 figure 动作，assetId + position 不变，仅修改 motion + expression。",
-  "",
-  "=== chara 新版 Live2D 包(pack:'chara',Cubism 3/4,现在的主力资产)===",
-  "角色资产指南中 pack 为 'chara' 的模型来自新版立绘包(路径形如 chara/<角色>/<服装>/…model3.json)。",
-  "存在 chara 模型时优先使用,优于旧版模型(旧版动作名形如 anon_idle01;chara 包规则不同,不要混用!)。",
-  "chara 模型的 motion/expression 命名规则:",
-  "- 原生名(首选,推荐):该模型 motions/expressions 列表里列出的裸名,如 mtn_smile01_C、exp_smile01。",
-  "  动作名后缀 _C/_L/_R 是镜头位置变体,居中演出优先选 _C。",
-  "- 跨角色名(高级用法):'前缀_角色/名字',如 A05_素世/exp_smile01 表示当前角色借用素世的表情。",
-  "  前缀必须完整(写 素世/exp_smile01 会找不到!)。前缀对照:00_=模型自己;",
-  "  A01_爱音 A02_灯 A03_乐奈 A04_立希 A05_素世 A06_睦 A07_祥子 A08_海玲 A09_初华 A10_喵梦;",
-  "  B01_茉幌 B02_朋花 B03_萤 B04_枣 B05_凪;C01_阿拉蕾 C02_都子 C03_律 C04_野乃花 C05_由乃;",
-  "  D01_蕾叶 D02_臬咲 D03_宁月 D04_千樱梨 D05_心玖。",
-  "  跨角色动作可能因参数差异效果打折,借用时优先选 MyGO/Ave Mujica 团内(A01-A10)的动作。",
-  "  注意:跨角色借用按参数 ID 驱动,目标模型缺的参数会被静默忽略;约 13% 的跨角色动作覆盖率不足 50%,",
-  "  播出来几乎不动(像回到默认神态)。不确定时退回该模型的原生裸名。",
-  "- assetId 永远用角色自己的模型(借表情/动作只改名字,不换模型)。",
-  "- chara 模型是 Cubism 5 格式(moc3 v5),需要 WebGAL 引擎安装 Cubism 5 核心才能渲染;",
-  "  编译/录制时 Galcode 会自动检查并在不匹配时告警,看到告警就先提醒用户换核心文件。",
-  "- chara 模型的 motion/expression 会原样写入脚本(不会加 anon_ 之类前缀),所以名字必须精确。",
-  "- 绝对不要编造名字。原生名从角色资产指南的 motions/expressions 列表选;",
-  "  完整跨角色清单见 figure/chara/表情动作总表.md(若可读取)。",
+  "=== 语义演出（chara 优先）===",
+  "pack='chara' 的 figure 优先写 acting，不要猜动作文件名：{ gesture:'denial', expression:'shy', gaze:'right', intensity:'medium' }。",
+  "- gesture 是身体动作族，expression 是独立面部情绪；两者可以相反，用反差表现 subtext。emotion 可作为共同回退。",
+  "- gaze 用 audience/left/right，编译器知道 _L 朝屏幕右、_R 朝屏幕左；intensity 用 low/medium/high 或 0..1。",
+  "- 只能从角色资产指南的 directing.motionFamilies/expressionFamilies 选真实能力，非法动作会被校验器拒绝。",
+  "- 默认只用原生动作；跨角色必须显式 allowShared=true 且覆盖率至少 75%，不要为炫技借用。",
+  "- 精确 motion/expression ID 仍可覆盖对应语义，用于复现；不提供 acting 的旧模型仍需同时给出两个 ID。",
+  "- 动作变化必须服务潜台词、注意力或关系变化，不要按句数凑动作，也不要整场只用 idle。",
+  "- chara 模型是 Cubism 5 格式(moc3 v5),需要 Cubism 5 核心；编译/录制检查到不匹配时要提醒用户。",
+  "同场景切换演出时 assetId 与 position 不变，只改 acting 或精确动作字段。",
   "",
   "=== 角色服装（换装）===",
   "每个角色在角色资产指南中有多套 Live2D 模型（preferredLive2D 数组），",
@@ -1390,18 +1358,20 @@ function storySchema() {
   return {
     title: "string",
     description: "string",
-    durationSec: "number",
+    durationSec: "number, creative target only",
     characters: ["string"],
+    direction: { premise: "string", characterArcs: [{ character: "string", want: "string", need: "string", defense: "string", change: "string" }] },
     scenes: [
       {
         id: "string",
         title: "string",
+        direction: { pov: "string", goal: "string", obstacle: "string", turn: "string", exitState: "string" },
         backgroundAssetId: "asset id from manifest, optional",
         bgmAssetId: "asset id from manifest, optional",
         actions: [
-          { type: "figure", character: "string", assetId: "asset id from manifest, may be figure or live2d", position: "left|center|right", motion: "Live2D motion name (REQUIRED; chara pack: native like mtn_smile01_C, or cross-character like A05_素世/mtn_smile01_C)", expression: "Live2D expression name (REQUIRED; chara pack: native like exp_smile01, or cross-character like A05_素世/exp_smile01)", transform: "OPTIONAL framing override { x, y, scale }; default is bust shot (scale 1.9) — omit unless the scene needs a different composition" },
-          { type: "line", speaker: "string", text: "string", durationSec: "number" },
-          { type: "narration", text: "string", durationSec: "number" },
+          { type: "figure", character: "string", assetId: "asset id from manifest, may be figure or live2d", position: "left|center|right", acting: { gesture: "semantic body action", emotion: "shared semantic fallback", expression: "independent facial emotion", gaze: "audience|left|right", intensity: "low|medium|high or 0..1", allowShared: "boolean, default false" }, motion: "optional exact Live2D motion ID, required without acting", expression: "optional exact Live2D expression ID, required without acting", transform: "OPTIONAL framing override { x, y, scale }; default is bust shot (scale 1.9) — omit unless the scene needs a different composition" },
+          { type: "line", speaker: "string", text: "string", subtext: "optional hidden intention", durationSec: "number, optional deterministic estimate" },
+          { type: "narration", text: "string", subtext: "optional narrative purpose", durationSec: "number, optional deterministic estimate" },
           { type: "wait", durationSec: "number" }
         ]
       }
@@ -1420,6 +1390,7 @@ function normalizeStory(story, brief, manifest) {
     description: String(story.description || brief.theme),
     durationSec: Number(story.durationSec || brief.durationSec || 180),
     characters: Array.isArray(story.characters) ? story.characters.map(String) : [],
+    ...(story.direction ? { direction: story.direction } : {}),
     scenes: Array.isArray(story.scenes) ? story.scenes : [],
     video: story.video || {},
     bgm: Array.isArray(story.bgm) ? story.bgm : []
@@ -1436,6 +1407,19 @@ function normalizeStory(story, brief, manifest) {
   }
   repairStoryCharacterAssets(normalized, manifest);
   return normalized;
+}
+
+function offlineFigureAction(asset, character, position, gesture, expression) {
+  const base = { type: "figure", character, assetId: asset?.id, position };
+  if (asset?.pack === "chara") {
+    const family = (value) => String(value || "idle").replace(/\d+$/, "");
+    return { ...base, acting: { gesture: family(gesture), expression: family(expression) } };
+  }
+  return {
+    ...base,
+    motion: gesture || asset?.defaultMotion || "idle01",
+    expression: expression || asset?.defaultExpression || "default"
+  };
 }
 
 function offlineStory(brief, manifest) {
@@ -1470,15 +1454,15 @@ function offlineStory(brief, manifest) {
         backgroundAssetId: background?.id,
         bgmAssetId: bgms[0]?.id,
         actions: [
-          { type: "figure", character: names[0] || "高松灯", assetId: stageFigures[0]?.id, position: "left", motion: stageFigures[0]?.defaultMotion || "idle01", expression: "default" },
-          { type: "figure", character: names[1] || "千早爱音", assetId: stageFigures[1]?.id, position: "right", motion: stageFigures[1]?.defaultMotion || "idle01", expression: "default" },
+          offlineFigureAction(stageFigures[0], names[0] || "高松灯", "left", "idle01"),
+          offlineFigureAction(stageFigures[1], names[1] || "千早爱音", "right", "idle01"),
           { type: "narration", text: "排练开始前，走廊的灯比平时暗一点。", durationSec: 3 },
           { type: "line", speaker: names[0] || "高松灯", text: "我刚才一直在想，大家是不是都在等一个不会说出口的答案。", durationSec: 5 },
           { type: "line", speaker: names[1] || "千早爱音", text: "那种答案，一说出口就会变得很重吧。", durationSec: 4 },
           { type: "wait", durationSec: 1 },
-          { type: "figure", character: names[0] || "高松灯", assetId: stageFigures[0]?.id, position: "left", motion: "cry01", expression: "cry01" },
+          offlineFigureAction(stageFigures[0], names[0] || "高松灯", "left", "cry01", "cry01"),
           { type: "line", speaker: names[0] || "高松灯", text: "可是，不说的话，也会一直留在那里。", durationSec: 4 },
-          { type: "figure", character: names[1] || "千早爱音", assetId: stageFigures[1]?.id, position: "right", motion: "smile01", expression: "smile01" },
+          offlineFigureAction(stageFigures[1], names[1] || "千早爱音", "right", "smile01", "smile01"),
           { type: "line", speaker: names[1] || "千早爱音", text: "那今天就先留一点点。留到下一首歌开始之前。", durationSec: 5 },
           { type: "narration", text: "门内传来调音的声音。没有人催促她们。", durationSec: 4 }
         ].filter(Boolean).filter((a) => !("assetId" in a) || a.assetId)
@@ -1652,6 +1636,7 @@ function buildCharacterAssetGuide(manifest) {
           defaultExpression: asset.defaultExpression,
           motions: filterShortNames(asset.motions || [], character.key).slice(0, 10),
           expressions: filterShortNames(asset.expressions || [], character.key).slice(0, 10),
+          ...(asset.directing ? { directing: summarizeDirecting(asset) } : {}),
           ...(asset.pack === "chara" ? {
             sharedMotions: asset.sharedMotions || 0,
             sharedExpressions: asset.sharedExpressions || 0
@@ -1663,7 +1648,7 @@ function buildCharacterAssetGuide(manifest) {
         displayName: character.displayName,
         aliases: character.aliases,
         ...(hasChara ? {
-          charaSharedNote: "chara 包模型支持跨角色动作/表情:名字写成 前缀_角色/名(如 A05_素世/exp_smile01),前缀必须完整;00_<自己角色>/名 也可指自己;motions/expressions 列表里的是原生裸名;完整清单见 figure/chara/表情动作总表.md"
+          charaSharedNote: "优先使用语义 acting(gesture/expression/gaze/intensity),由编译器解析真实动作;跨角色仅在 allowShared=true 且参数覆盖率至少 75% 时可用"
         } : {}),
         preferredLive2D: live2d
       };
@@ -1744,9 +1729,10 @@ function repairStoryCharacterAssets(story, manifest) {
       if (!replacement) continue;
       action.assetId = replacement.id;
       if (replacement.pack === "chara") {
-        // chara 包动作/表情名原样使用(原生裸名或 前缀_角色/名),不加旧包的角色前缀
-        action.motion = action.motion || replacement.defaultMotion || "";
-        action.expression = action.expression || replacement.defaultExpression || "";
+        if (!action.acting) {
+          action.motion = action.motion || replacement.defaultMotion || "";
+          action.expression = action.expression || replacement.defaultExpression || "";
+        }
       } else {
         action.motion = prefixMotionName(action.motion || replacement.defaultMotion || "", characterKey);
         action.expression = prefixMotionName(action.expression || replacement.defaultExpression || "", characterKey);
@@ -1888,6 +1874,8 @@ async function enrichAsset(asset) {
     enriched.pack = "chara";
     enriched.charaCharacterDir = chara.characterDir;
     enriched.charaCostumeDir = chara.costumeDir;
+    const modelJson = JSON.parse(await fs.readFile(asset.path, "utf8").catch(() => "{}"));
+    enriched.directing = await inspectCharaDirecting(asset.path, modelJson);
   }
   if (meta.sharedMotions) enriched.sharedMotions = meta.sharedMotions;
   if (meta.sharedExpressions) enriched.sharedExpressions = meta.sharedExpressions;
@@ -2317,6 +2305,14 @@ async function compileStory(story, manifest, outDir, flags) {
   // Always repair character assets: maps display names to canonical keys
   // and replaces any stale asset IDs with the best available match.
   repairStoryCharacterAssets(story, manifest);
+  const assetMap = new Map(manifest.assets.map((asset) => [asset.id, asset]));
+  for (const scene of story.scenes || []) {
+    for (const action of scene.actions || []) {
+      if (action?.type !== "figure") continue;
+      const asset = assetMap.get(action.assetId);
+      if (asset?.kind === "live2d") Object.assign(action, resolveLive2DFigure(action, asset));
+    }
+  }
 
   // Gaze/direction pass: unless the story choreographs it explicitly, the
   // speaker faces the audience (C) and other on-stage figures face the
@@ -2333,7 +2329,6 @@ async function compileStory(story, manifest, outDir, flags) {
 
   await ensureWebGALRuntimeFiles(gameDir);
 
-  const assetMap = new Map(manifest.assets.map((asset) => [asset.id, asset]));
   const copied = new Map();
   const sceneText = [];
   sceneText.push(`; Generated by Galcode at ${new Date().toISOString()}`);
@@ -2380,19 +2375,7 @@ async function compileStory(story, manifest, outDir, flags) {
 
   await fs.writeFile(path.join(gameDir, "scene", "start.txt"), `${sceneText.join("\n")}\n`, "utf8");
 
-  // 计算实际时间线（累计各动作的 durationSec）
-  let clock = 0;
-  const timeline = [];
-  for (const scene of story.scenes || []) {
-    for (const action of scene.actions || []) {
-      const dur = Number(action.durationSec || 0);
-      timeline.push({ ...action, startSec: clock, endSec: clock + Math.max(0, dur) });
-      clock += Math.max(0, dur);
-    }
-  }
-  // 始终保存真实时间线时长，供预览与二次编辑参考
-  story._timeline = timeline;
-  story._totalDurationSec = clock + 15; // 留 15 秒缓冲（end 动画 + WebGAL 过渡）
+  applyStoryTiming(story);
 
   // Resolve and copy BGM assets into the game directory
   if (story.bgm) {
@@ -2468,14 +2451,14 @@ async function compileAction(action, assetMap, gameDir, copied) {
   if (action.type === "line") {
     const speaker = cleanText(action.speaker || "");
     const text = cleanText(action.text || "");
-    return `${speaker}:${text};`;
+    return `${speaker}:${text} -notend -next;\nwait:${timedActionMs(action)} -nobreak;`;
   }
   if (action.type === "narration") {
-    return `:${cleanText(action.text || "")};`;
+    return `:${cleanText(action.text || "")} -notend -next;\nwait:${timedActionMs(action)} -nobreak;`;
   }
   if (action.type === "wait") {
     const ms = Math.max(0, Math.round(Number(action.durationSec || 1) * 1000));
-    return `wait:${ms};`;
+    return `wait:${ms} -nobreak;`;
   }
   if (action.type === "bgm") {
     const name = await copyAssetForWebGAL(assetMap.get(action.assetId), gameDir, "bgm", copied);
@@ -2944,7 +2927,7 @@ async function writePreviewHtml(outDir, story) {
       speaker.textContent = line.speaker || "";
       text.textContent = line.text || "";
       i += 1;
-      if (i <= lines.length) setTimeout(show, Math.max(1200, line.durationSec * 1000));
+      if (i <= lines.length) setTimeout(show, Math.max(1200, timedActionMs(line)));
     }
     show();
   </script>

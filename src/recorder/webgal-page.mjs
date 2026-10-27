@@ -1,8 +1,7 @@
-// WebGAL page preparation for recording, ported from the deleted recorder
-// (legacy prepareRecordPage / autoplay / ensureLanguageSelected): seed the
-// language keys before page scripts run, survive the LANGUAGE SELECT screen,
-// click through the title screen, then start the Space-key auto-advancer
-// (~4s per line, WebGAL-proven cadence).
+// WebGAL page preparation for recording: seed the language keys before page
+// scripts run, survive the LANGUAGE SELECT screen and click through the title.
+// Legacy scripts then start the Space-key auto-advancer; timing-v2 scripts
+// advance through their own text/wait performs.
 //
 // All DOM probing goes through page.evaluate so the same helpers work in
 // realtime mode and between beginFrame pumps in deterministic mode.
@@ -239,9 +238,16 @@ export async function startVirtualAutoAdvance(page, advanceEveryFrames) {
 
 export async function readVirtualClock(page) {
   return await page.evaluate(() => ({
+    virtualMs: window.__galcodeVirtualNow?.() || 0,
     rafTicks: window.__galcodeRafTicks || 0,
     advances: window.__galcodeVirtualAdvances || 0
-  })).catch(() => ({ rafTicks: 0, advances: 0 }));
+  })).catch(() => ({ virtualMs: 0, rafTicks: 0, advances: 0 }));
+}
+
+export async function setVirtualClockScale(page, scale) {
+  await page.evaluate((value) => {
+    window.__galcodeSetClockScale?.(value);
+  }, scale);
 }
 
 // Virtual-clock advancer driven by the page's (virtualized) performance.now —
@@ -311,12 +317,14 @@ export async function installVirtualClock(page, frameMs) {
 
     let frames = 0;
     let virtualMs = 0;
+    let clockScale = 1;
     let nextTimerId = 1;
     const timers = new Map();
 
     performance.now = () => perfBase + virtualMs;
     Date.now = () => dateBase + virtualMs;
     window.__galcodeVirtualNow = () => virtualMs;
+    window.__galcodeSetClockScale = (value) => { clockScale = value > 0 ? 1 : 0; };
 
     // rAF still fires once per beginFrame; only the timestamp argument is
     // replaced with the virtual frame time.
@@ -338,23 +346,25 @@ export async function installVirtualClock(page, frameMs) {
     window.clearInterval = (id) => timers.delete(id);
 
     function tick() {
-      frames += 1;
+      frames += clockScale;
       virtualMs = frames * frameMs;
-      // Snapshot semantics: timers scheduled by callbacks during this pass
-      // fire on a later frame, so a setTimeout(fn, 0) chain cannot starve a
-      // frame. Sub-frame intervals are quantized to frame boundaries.
-      for (const [id, timer] of [...timers]) {
-        if (timer.due > virtualMs) continue;
-        try {
-          timer.fn(...timer.args);
-        } catch (error) {
-          console.error("[galcode virtual clock] timer callback failed:", error);
-        }
-        if (timer.interval) {
-          timer.due += timer.interval;
-          if (timer.due <= virtualMs) timer.due = virtualMs + timer.interval;
-        } else {
-          timers.delete(id);
+      if (clockScale > 0) {
+        // Snapshot semantics: timers scheduled by callbacks during this pass
+        // fire on a later frame, so a setTimeout(fn, 0) chain cannot starve a
+        // frame. Sub-frame intervals are quantized to frame boundaries.
+        for (const [id, timer] of [...timers]) {
+          if (timer.due > virtualMs) continue;
+          try {
+            timer.fn(...timer.args);
+          } catch (error) {
+            console.error("[galcode virtual clock] timer callback failed:", error);
+          }
+          if (timer.interval) {
+            timer.due += timer.interval;
+            if (timer.due <= virtualMs) timer.due = virtualMs + timer.interval;
+          } else {
+            timers.delete(id);
+          }
         }
       }
       realRaf(tick);

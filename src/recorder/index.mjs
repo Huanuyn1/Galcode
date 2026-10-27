@@ -20,16 +20,22 @@ import { scanMoc3Versions } from "../live2d-compat.mjs";
 // loop stops and ffmpeg finalizes whatever it has — a partial valid video
 // beats a dead .mp4 without a moov atom.
 
-export async function readStoryDuration(projectDir) {
+export async function readStoryTiming(projectDir) {
   const storyPath = path.join(projectDir, "story.json");
-  if (!fssync.existsSync(storyPath)) return 0;
+  if (!fssync.existsSync(storyPath)) return { durationSec: 0, scriptTimed: false };
   try {
     const story = JSON.parse(await fs.readFile(storyPath, "utf8"));
-    // 优先使用编译时计算的真实时间线时长，AI 声明的 durationSec 仅供参考
-    return Number(story._totalDurationSec || story.durationSec || 0);
+    return {
+      durationSec: Number(story._totalDurationSec || story.durationSec || 0),
+      scriptTimed: Number(story._timingVersion || 0) >= 2
+    };
   } catch {
-    return 0;
+    return { durationSec: 0, scriptTimed: false };
   }
+}
+
+export async function readStoryDuration(projectDir) {
+  return (await readStoryTiming(projectDir)).durationSec;
 }
 
 export function resolveRecordMode(flags = {}) {
@@ -50,12 +56,17 @@ export function recordTimeoutMs(durationSec, flags = {}) {
 
 export async function recordProject(projectDir, flags = {}, deps = {}) {
   const log = flags.quiet ? () => {} : (line) => console.log(line);
+  const recordStarted = Date.now();
+  const profile = (name, started) => {
+    if (process.env.GALCODE_RECORD_PROFILE === "1") log(`record profile: ${name}=${((Date.now() - started) / 1000).toFixed(2)}s`);
+  };
   projectDir = path.resolve(projectDir);
   if (!fssync.existsSync(path.join(projectDir, "game", "scene", "start.txt")) && !flags.url) {
     throw new Error(`Not a compiled Galcode project: ${projectDir} (missing game/scene/start.txt — run \`galcode compile\` or \`galcode yolo\` first)`);
   }
 
-  const durationSec = Number(flags.duration || flags.durationSec || await readStoryDuration(projectDir) || 180);
+  const storyTiming = await readStoryTiming(projectDir);
+  const durationSec = Number(flags.duration || flags.durationSec || storyTiming.durationSec || 180);
   // --video-out is the video path. (--out belongs to make/yolo as the PROJECT
   // dir; the record command translates its own --out into --video-out.)
   const out = path.resolve(flags.videoOut || path.join(projectDir, "final.mp4"));
@@ -90,14 +101,18 @@ export async function recordProject(projectDir, flags = {}, deps = {}) {
   let stats = null;
   try {
     let url = flags.url || "";
+    const previewStarted = Date.now();
     if (!url) {
       if (!deps.startWebGALPreview) throw new Error("No --url given and no WebGAL preview starter is available.");
       autoServer = await deps.startWebGALPreview(projectDir, flags);
       url = autoServer.url;
     }
+    profile("preview-ready", previewStarted);
 
+    const browserSetupStarted = Date.now();
     const ensureBrowser = deps.ensureBrowser || ensureRecorderBrowser;
     const { executablePath, needsNoSandbox, deterministicDriver } = await ensureBrowser({ cacheDir: flags.browserCacheDir ? path.resolve(flags.browserCacheDir) : undefined, log });
+    profile("browser-ready", browserSetupStarted);
     await fs.mkdir(path.dirname(out), { recursive: true });
     await fs.rm(out, { force: true });
 
@@ -114,6 +129,7 @@ export async function recordProject(projectDir, flags = {}, deps = {}) {
       height,
       fps,
       durationSec,
+      scriptTimed: storyTiming.scriptTimed,
       ffmpeg: ffmpegCommand,
       crf: flags.crf !== undefined ? Number(flags.crf) : 18,
       startDelayMs: Number(flags.startDelay || 1500),
@@ -137,13 +153,16 @@ export async function recordProject(projectDir, flags = {}, deps = {}) {
     for (;;) {
       try {
         const vt = driver === "vt-policy";
+        const driverStarted = Date.now();
         browser = await launch({ executablePath, mode: vt ? "realtime" : mode, width, height, noSandbox });
+        profile(`browser-launch:${driver}`, driverStarted);
         const record = vt
           ? (deps.recordVtPolicy || recordVtPolicy)
           : mode === "deterministic"
             ? (deps.recordDeterministic || recordDeterministic)
             : (deps.recordRealtime || recordRealtime);
         stats = await record({ browser, ...recorderArgs });
+        profile(`driver-total:${driver}`, driverStarted);
         if (vt || (noSandbox && !needsNoSandbox)) {
           await markRecorderQuirks(flags.browserCacheDir ? path.resolve(flags.browserCacheDir) : undefined, {
             needsNoSandbox: noSandbox || undefined,
@@ -160,18 +179,20 @@ export async function recordProject(projectDir, flags = {}, deps = {}) {
           log("Browser died mid-record (sandbox kill); retrying with --no-sandbox…");
         } else if (mode === "deterministic" && driver !== "vt-policy") {
           driver = "vt-policy";
-          log("beginFrame traps this host's browser process; falling back to the vt-policy deterministic driver (Emulation.setVirtualTimePolicy + captureScreenshot)…");
+          log("beginFrame traps this host's browser process; falling back to the external-clock deterministic driver (in-page clock + screencast)…");
         } else {
           throw error;
         }
       }
     }
   } finally {
+    const cleanupStarted = Date.now();
     clearTimeout(timeoutTimer);
     process.off("SIGINT", onSignal);
     process.off("SIGTERM", onSignal);
     await closeBrowserTree(browser);
     if (autoServer?.child) killChildTree(autoServer.child);
+    profile("cleanup", cleanupStarted);
   }
 
   const outStat = fssync.statSync(out, { throwIfNoEntry: false });
@@ -186,6 +207,7 @@ export async function recordProject(projectDir, flags = {}, deps = {}) {
     warn: (line) => console.warn(line)
   });
 
+  profile("total", recordStarted);
   log(`Recorded ${out} (${outStat.size} bytes${mix.mixed ? `, BGM mixed: ${mix.tracks} track(s)` : ""})`);
   if (timedOut) log("Note: recording stopped early (timeout/signal); the output is a valid partial recording.");
   return { out, durationSec, mode, ...stats, bgm: mix };

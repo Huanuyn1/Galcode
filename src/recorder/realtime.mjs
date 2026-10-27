@@ -29,6 +29,7 @@ export async function recordRealtime({
   height,
   fps,
   durationSec,
+  scriptTimed = false,
   ffmpeg = "ffmpeg",
   crf = 18,
   jpegQuality = 92,
@@ -46,7 +47,13 @@ export async function recordRealtime({
   await installLanguagePreset(page);
   await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
   await prepareWebGALPage(page, {
-    width, height, startDelayMs, sceneDelayMs, noAutoplay, autoAdvanceIntervalMs, log
+    width,
+    height,
+    startDelayMs: scriptTimed ? 0 : startDelayMs,
+    sceneDelayMs: scriptTimed ? 0 : sceneDelayMs,
+    noAutoplay,
+    autoAdvanceIntervalMs: scriptTimed ? 0 : autoAdvanceIntervalMs,
+    log
   });
 
   // Authoritative Live2D core check: the compile-time side is a heuristic,

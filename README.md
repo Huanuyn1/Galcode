@@ -57,7 +57,7 @@ npm i -g galcode
 galcode
 ```
 
-第一次运行会自动完成初始化：在 `$DSH_HOME/profiles/galcode`（默认 `~/.dsh/profiles/galcode`）创建 dsh profile，用 Galcode 自带的 pnpm 安装社区 TUI（`@deepseek-harness-tui/dsh-tui`）和 Galcode 的 dsh bundle（`dsh-galcode`，随包附带在 `packages/dsh-galcode`），自检通过后进入 TUI。dsh 运行时（`@deepseek-ai/dsh` 0.2.0-rc.2）随 Galcode 一起安装，不需要单独准备。
+第一次运行会自动完成初始化：通过官方 `dsh plugin --profile galcode add` 在 `$DSH_HOME/profiles/galcode`（默认 `~/.dsh/profiles/galcode`）创建并维护 dsh profile，将社区 TUI（`@deepseek-harness-tui/dsh-tui`）和 Galcode 的 dsh bundle（`dsh-galcode`，随包附带在 `packages/dsh-galcode`）注册进 `dsh.profile.bundles`，自检通过后进入 TUI。pnpm 由 Galcode 附带并提供给官方插件命令；重复 setup 不会清除你的依赖、bundle 顺序或 `cordis.patch.yml`。dsh 运行时（`@deepseek-ai/dsh` 0.2.0-rc.2）随 Galcode 一起安装，不需要单独准备。
 
 ### 4. 配置模型
 
@@ -81,13 +81,14 @@ node "$(npm root -g)/galcode/scripts/galcode-bootstrap.mjs install"
 
 ## 在 TUI 里做一部片子
 
-TUI 里的 agent 使用 `galcode` 预设：人格移植自旧版 writer/discuss/brainstorm 提示词，挂载着四个技能（`story-schema`、`webgal-rules`、`asset-conventions`、`live2d-licensing`）和一组 MCP 工具。典型工作流就是直接跟它聊天：
+TUI 里的 agent 使用 `galcode` 预设：人格移植自旧版 writer/discuss/brainstorm 提示词，挂载着五个技能（`story-schema`、`webgal-rules`、`asset-conventions`、`live2d-licensing`、`live2d-directing`）和一组 MCP 工具。典型工作流就是直接跟它聊天：
 
 1. **讨论**：告诉它你想写什么——「灯和爱音，雨夜，排练前误会，结尾不要大和解」。它会帮你打磨主题、角色、时长和情绪基调。
-2. **生成**：方向清晰后，它会读取素材清单（`galcode://assets`）写出完整的 story JSON。
-3. **校验**：调用 `galcode_validate_story` 检查结构、素材 id、动作/表情，有错自动修。
-4. **编译**：调用 `galcode_compile_story` 生成 WebGAL 工程到 `outputs/<作品名>/`。
-5. **预览**：调用 `galcode_preview_start`，等它打印出 URL（形如 `http://127.0.0.1:3000`），用浏览器打开就能看片。看完让它调用 `galcode_preview_stop` 收工。
+2. **故事设计**：为主要角色建立 want/need/defense/change，为每个场景写清 pov/goal/obstacle/turn/exitState；再写台词 subtext 和语义演出并做一次人物/因果复核。
+3. **生成**：方向清晰后，它会读取角色写作约束与素材的 Live2D 能力目录，写出完整的 story JSON；chara 模型用 acting 表达动作/表情意图，由程序解析真实 ID。
+4. **校验**：调用 `galcode_validate_story` 检查结构、素材 id、动作/表情，有错自动修。
+5. **编译**：调用 `galcode_compile_story` 生成 WebGAL 工程到 `outputs/<作品名>/`。
+6. **预览**：调用 `galcode_preview_start`，等它打印出 URL（形如 `http://127.0.0.1:3000`），用浏览器打开就能看片。看完让它调用 `galcode_preview_stop` 收工。
 
 写得不好就换个主题再来一次。欲速则不达。
 
@@ -138,9 +139,13 @@ galcode cli record outputs/<作品名> --duration 60 --fps 30 --out outputs/<作
 
 录制基于 pinned 的 chrome-headless-shell（Chrome for Testing 稳定版，首次录制时才下载到 `.galcode/browser/`，不会在 npm install 时下载；可用 `GALCODE_CHROME_DOWNLOAD_BASE_URL` 指定镜像源）。不给 `--url` 时会自动启动 WebGAL 预览再录制；`--duration` 缺省取编译出的故事时间线时长；录完自动把 `story.json` 里的 BGM 时间线混音进成片（对齐视频精确时长）。`make`/`yolo` 加 `--record` 可在编译后直接出片。
 
-模式：`--mode deterministic`（默认，`HeadlessExperimental.beginFrame` 驱动虚拟帧时钟逐帧渲染，页内 rAF / performance.now / Date.now / setTimeout 统一虚拟化到帧时钟，动作与台词节奏与墙钟渲染耗时解耦，出片始终丝滑）；`--mode realtime`（ paced CDP 截图管线，墙钟节奏，机器负载高时会掉帧，仅用于快速预览）。旧的 `--capture electron|screenshot` 已被 `--mode realtime|deterministic` 取代。超时规则：`max(180s, duration*2+180s)`；ffmpeg 已写出文件时容忍非零退出（保留半成品）。需要 ffmpeg；浏览器完整性（二进制+资源文件清单）和能力探针（CDP `HeadlessExperimental.beginFrame`）在录制前自检，失败自动重新下载，`galcode doctor` 可查看状态。
+编译器会把每句台词/旁白转换为“文本演出 + 阻塞等待”，逐句停留取创作时长与文字动画所需时间的较大值；省略逐句时长时由程序按文本估算。顶层 `durationSec` 只是创作目标，实际录制以 `_timeline`、`_totalDurationSec`（内容时长 + 3 秒收尾）为准。录制不再每隔 4 秒猜测按键，新旧脚本仍兼容。
 
-deterministic 有两条驱动链：默认 beginFrame（最省 CDP 往返）；宿主上 beginFrame 把浏览器进程搞崩（如 macOS 26 arm64 的 SIGTRAP）时自动回退到 vt-policy 驱动（页内虚拟时钟 + 逐帧 CDP tick + captureScreenshot，不依赖任何 begin-frame 开关），回退结果会写进 `.galcode/browser/manifest.json` 让下次直接用。`galcode browser probe` 可忽略缓存现场重测浏览器能力。
+模式：`--mode deterministic`（默认，`HeadlessExperimental.beginFrame` 驱动虚拟帧时钟逐帧渲染，页内 rAF / performance.now / Date.now / setTimeout 统一虚拟化到帧时钟，动作与台词节奏与墙钟渲染耗时解耦，出片始终丝滑）；`--mode realtime`（ paced CDP 截图管线，墙钟节奏，机器负载高时会掉帧，仅用于快速预览）。旧的 `--capture electron|screenshot` 已被 `--mode realtime|deterministic` 取代。超时规则：realtime 为 `max(180s, duration*2+180s)`，deterministic 为 `max(180s, duration*8+180s)`；ffmpeg 已写出文件时容忍非零退出（保留半成品）。需要 ffmpeg；浏览器完整性（二进制+资源文件清单）和能力探针（CDP `HeadlessExperimental.beginFrame`）在录制前自检，失败自动重新下载，`galcode doctor` 可查看状态。
+
+deterministic 有两条驱动链：默认 beginFrame（最省 CDP 往返）；宿主上 beginFrame 把浏览器进程搞崩（如 macOS 26 arm64 的 SIGTRAP）时自动回退到 vt-policy 驱动（页内虚拟时钟 + 逐帧 CDP tick + screencast 推送帧，不依赖任何 begin-frame 开关），回退结果会写进 `.galcode/browser/manifest.json` 让下次直接用。`galcode browser probe` 可忽略缓存现场重测浏览器能力。vt-policy 默认使用 screencast，静态画面复用上一帧，可用 `GALCODE_VT_CAPTURE=screenshot` 回退同步截图。
+
+macOS 的 realtime/vt-policy 链默认尝试 ANGLE Metal 硬件渲染，启动失败自动回退软件渲染；可用 `GALCODE_GPU=swiftshader` 强制关闭硬件加速，或用 `GALCODE_GPU=metal` 显式指定。设置 `GALCODE_RECORD_PROFILE=1` 会在日志中输出初始化、tick、CDP 帧采集、base64 解码和 ffmpeg 写入的分阶段耗时。
 
 Live2D 运行时补丁：预览/录制启动时会幂等地给 `pixi-live2d-display-webgal` 打两个补丁——(1) `CubismModel` 不再缓存参数/部件的 TypedArray 视图（asm.js 堆增长会换掉底层 ArrayBuffer，缓存视图会静默失效、模型冻在默认姿态）；(2) `live2dcubismcore.min.js` 初始堆 16MB → 256MB（加载期不再触发堆增长）。若自行更新这两个依赖需确认补丁仍适用（`galcode doctor`/preview 日志会提示）。
 
@@ -210,6 +215,8 @@ bin/galcode.js             入口分发：TUI / setup / doctor / cli 旧命令
 bin/galcode-mcp.js         MCP 服务器入口
 src/dsh-profile.mjs        dsh profile 初始化、启动、doctor
 src/galcode.js             旧版 CLI 核心
+src/live2d-directing.mjs   Live2D 能力索引、语义动作解析与兼容性检查
+src/story-timing.mjs       逐句阅读时长、统一时间线与总时长计算
 src/recorder/              视频录制：浏览器运行时管理、帧采集（realtime/deterministic）、BGM 混音
 src/mcp/server.mjs         MCP 服务器实现
 packages/dsh-galcode/      dsh bundle：cordis.patch.yml、presets/、skills/

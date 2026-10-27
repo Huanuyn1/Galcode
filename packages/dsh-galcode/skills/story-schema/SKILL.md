@@ -12,12 +12,25 @@ Galcode 把结构化的 story JSON 编译成 WebGAL 工程。顶层字段:
 {
   "title": "string,作品标题",
   "description": "string,作品简介",
-  "durationSec": "number,目标总时长(秒)",
+  "durationSec": "number,创作目标总时长(秒),不代表最终录制长度",
   "characters": ["string,登场角色显示名,如 高松灯"],
+  "direction": {
+    "premise": "具体处境与戏剧问题",
+    "characterArcs": [
+      { "character": "角色名", "want": "外在目标", "need": "内在需要", "defense": "惯用防御", "change": "结尾可见变化" }
+    ]
+  },
   "scenes": [
     {
       "id": "string,场景标识(kebab-case)",
       "title": "string,场景标题",
+      "direction": {
+        "pov": "视角角色",
+        "goal": "本场景可行动目标",
+        "obstacle": "具体阻力",
+        "turn": "信息/决定/情绪反转",
+        "exitState": "带入下一场的关系与情绪状态"
+      },
       "backgroundAssetId": "string,背景素材 id,来自 galcode://assets,可选",
       "bgmAssetId": "string,BGM 素材 id,来自 galcode://assets,可选",
       "actions": []
@@ -52,21 +65,32 @@ Galcode 把结构化的 story JSON 编译成 WebGAL 工程。顶层字段:
     "character": "角色显示名,或 none 表示清空该站位",
     "assetId": "素材 id(figure 或 live2d),character 为 none 时不需要",
     "position": "left|center|right",
-    "motion": "Live2D 动作名,Live2D 模型必填",
-    "expression": "Live2D 表情名,Live2D 模型必填"
+    "acting": {
+      "gesture": "身体动作族,如 denial/nod/look/smile",
+      "emotion": "动作与表情的共同语义回退",
+      "expression": "独立面部情绪,如 shy/sad/smile",
+      "gaze": "audience|left|right",
+      "intensity": "low|medium|high 或 0..1",
+      "allowShared": "是否允许高覆盖跨角色动作,默认 false"
+    },
+    "motion": "可选精确动作 ID,覆盖 acting.gesture",
+    "expression": "可选精确表情 ID,覆盖 acting.expression"
   },
-  { "type": "line", "speaker": "string", "text": "string", "durationSec": "number" },
-  { "type": "narration", "text": "string", "durationSec": "number" },
+  { "type": "line", "speaker": "string", "text": "string", "subtext": "潜台词/真实意图,可选", "durationSec": "number,可省略由程序估算" },
+  { "type": "narration", "text": "string", "subtext": "叙事目的,可选", "durationSec": "number,可省略由程序估算" },
   { "type": "wait", "durationSec": "number" }
 ]
 ```
 
 规则:
 
-- 每个 figure 动作必须同时带 motion 和 expression(从该模型的 motions/expressions 列表里选)。
+- chara 模型优先只写 acting,由编译器从真实注册动作中解析;不提供 acting 时,motion 和 expression 仍必须同时提供。精确 ID 可用于复现,非法 ID 会在校验阶段报错。
+- gesture 与 expression 可以独立组合,利用“身体否认但表情害羞”这类反差表现潜台词;动作变化必须服务剧情,不按固定次数凑动作。
+- 默认只用原生动作。跨角色动作必须显式 allowShared=true,且参数覆盖率至少 75%;低于 50% 的精确引用也会报错。
 - 移除角色:`{ "type": "figure", "character": "none", "position": "left" }`。
-- 角色在同一站位切换情绪:assetId 和 position 不变,只改 motion/expression。
-- BGM 数组(顶层 `bgm`)可选:编译时对应音频文件会被复制到 game/bgm/ 供引擎播放,startSec/endSec/volume/fadeIn/fadeOut 仅作为时间线信息随 story.json 保存;不存在后期混音步骤。不提供 bgm 数组则只使用场景级 bgmAssetId 配乐。
+- 角色在同一站位切换情绪:assetId 和 position 不变,只改 acting 或 motion/expression。
+- BGM 数组(顶层 `bgm`)可选:编译时对应音频文件会被复制到 game/bgm/,录制时按 startSec/endSec/volume/fadeIn/fadeOut 后期混音。不提供 bgm 数组则只使用场景级 bgmAssetId 配乐。
+- 每句 line/narration 编译为文本演出 + 阻塞等待,实际停留取 durationSec 与文字动画所需时间的较大值;省略 durationSec 时由程序估算。顶层 durationSec 只是创作目标,`_timeline` 与 `_totalDurationSec`(内容 + 3 秒收尾)才是录制依据。
 - 场景数量 3-5 个,每个场景 4-8 句台词/旁白。
 
 ## 最小完整示例

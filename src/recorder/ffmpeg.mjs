@@ -76,17 +76,21 @@ export async function writeFrame(encoder, buffer) {
 // tolerated when the output file exists and is non-empty.
 export async function finishEncoder(encoder, { out, graceMs = 15000 } = {}) {
   try { encoder.stdin.end(); } catch { /* already closed */ }
-  const result = await Promise.race([
-    encoder.done,
-    (async () => {
-      await new Promise((resolve) => setTimeout(resolve, graceMs));
+  let watchdog;
+  const timeout = new Promise((resolve) => {
+    watchdog = setTimeout(async () => {
       killChildTree(encoder.child);
       await new Promise((resolve) => setTimeout(resolve, 2000));
       if (encoder.child.exitCode === null) killChildTree(encoder.child, "SIGKILL");
-      return encoder.done;
-    })()
-  ]);
-  return await toleratePartialSuccess(result, out);
+      resolve(await encoder.done);
+    }, graceMs);
+  });
+  try {
+    const result = await Promise.race([encoder.done, timeout]);
+    return await toleratePartialSuccess(result, out);
+  } finally {
+    clearTimeout(watchdog);
+  }
 }
 
 export function abortEncoder(encoder) {

@@ -81,60 +81,85 @@ describe("profileReadiness", () => {
   });
 });
 
-describe("setupDshProfile (stubbed install/verify)", () => {
-  function stubInstall(profileDir) {
-    // Simulates a successful pnpm install: only the markers profileReadiness
-    // checks, no packages, no network.
+describe("setupDshProfile (stubbed official install/verify)", () => {
+  const fakeDsh = { jsPath: "/fake/dsh.js", version: "0.2.0-rc.2" };
+
+  function stubOfficialInstall(profileDir) {
+    const manifestPath = path.join(profileDir, "package.json");
+    const existing = existsSync(manifestPath)
+      ? JSON.parse(readFileSync(manifestPath, "utf8"))
+      : { name: "dsh-profile-galcode", private: true };
+    const bundles = ["@deepseek-ai/dsh-base"];
+    for (const bundle of [DSH_TUI_PACKAGE, DSH_BUNDLE_PACKAGE, ...(existing.dsh?.profile?.bundles || [])]) {
+      if (!bundles.includes(bundle)) bundles.push(bundle);
+    }
+    const manifest = {
+      ...existing,
+      dependencies: {
+        ...(existing.dependencies || {}),
+        [DSH_TUI_PACKAGE]: "0.13.0",
+        [DSH_BUNDLE_PACKAGE]: "link:/fake/dsh-galcode"
+      },
+      dsh: { ...(existing.dsh || {}), profile: { bundles } }
+    };
+    mkdirSync(profileDir, { recursive: true });
+    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
     mkdirSync(path.join(profileDir, "node_modules", "@deepseek-harness-tui", "dsh-tui"), { recursive: true });
     mkdirSync(path.join(profileDir, "node_modules", "dsh-galcode"), { recursive: true });
+    if (!existsSync(path.join(profileDir, "cordis.patch.yml"))) writeFileSync(path.join(profileDir, "cordis.patch.yml"), "[]\n", "utf8");
     return Promise.resolve();
   }
 
-  async function runSetup(home, log) {
-    return setupDshProfile({ dshHome: home, log, install: stubInstall, verify: async () => {} });
+  function options(home, log = () => {}) {
+    return {
+      dshHome: home,
+      log,
+      dsh: fakeDsh,
+      install: stubOfficialInstall,
+      verify: async () => {}
+    };
   }
 
-  it("creates the profile, then re-runs idempotently", async () => {
+  it("delegates profile creation to dsh and preserves user changes on re-run", async () => {
     const home = scratchDir("dsh-home");
     const profileDir = resolveProfileDir(home);
     const lines = [];
-    const log = (line) => lines.push(line);
-
-    await runSetup(home, log);
-    expect(lines.some((line) => line.includes("wrote package.json"))).toBe(true);
+    await setupDshProfile(options(home, (line) => lines.push(line)));
+    expect(lines.some((line) => line.includes("dsh plugin"))).toBe(true);
 
     const manifest = JSON.parse(readFileSync(path.join(profileDir, "package.json"), "utf8"));
     expect(manifest.dsh.profile.bundles).toEqual(["@deepseek-ai/dsh-base", DSH_TUI_PACKAGE, DSH_BUNDLE_PACKAGE]);
-    expect(manifest.dependencies[DSH_TUI_PACKAGE]).toBeTruthy();
-    expect(manifest.dependencies[DSH_BUNDLE_PACKAGE].startsWith("file:")).toBe(true);
-    expect(existsSync(path.join(profileDir, "cordis.patch.yml"))).toBe(true);
-    expect(existsSync(path.join(profileDir, "pnpm-workspace.yaml"))).toBe(true);
+    expect(manifest.dependencies[DSH_BUNDLE_PACKAGE]).toBe("link:/fake/dsh-galcode");
 
-    // User edits between runs must survive: a hand-written patch layer and a
-    // custom dependency/bundle entry.
     writeFileSync(path.join(profileDir, "cordis.patch.yml"), "# user notes\n[]\n", "utf8");
     manifest.dependencies["some-user-plugin"] = "1.2.3";
     manifest.dsh.profile.bundles.push("some-user-plugin");
     writeFileSync(path.join(profileDir, "package.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 
-    const lines2 = [];
-    await setupDshProfile({ dshHome: home, log: (line) => lines2.push(line), install: stubInstall, verify: async () => {} });
-    expect(lines2.some((line) => line.includes("package.json: up to date"))).toBe(true);
+    await setupDshProfile(options(home));
     expect(readFileSync(path.join(profileDir, "cordis.patch.yml"), "utf8")).toBe("# user notes\n[]\n");
-
     const merged = JSON.parse(readFileSync(path.join(profileDir, "package.json"), "utf8"));
     expect(merged.dependencies["some-user-plugin"]).toBe("1.2.3");
     expect(merged.dsh.profile.bundles).toEqual(["@deepseek-ai/dsh-base", DSH_TUI_PACKAGE, DSH_BUNDLE_PACKAGE, "some-user-plugin"]);
     expect(merged.dsh.profile.bundles.filter((bundle) => bundle === DSH_TUI_PACKAGE)).toHaveLength(1);
   });
 
-  it("fails when the install leaves the profile incomplete", async () => {
+  it("resolves dsh through the injectable installer seam", async () => {
+    const home = scratchDir("dsh-home-ensure");
+    let ensured = 0;
+    await setupDshProfile({
+      ...options(home),
+      dsh: undefined,
+      ensureDsh: async () => { ensured += 1; return fakeDsh; }
+    });
+    expect(ensured).toBe(1);
+  });
+
+  it("fails when the official install leaves the profile incomplete", async () => {
     const home = scratchDir("dsh-home-broken");
     await expect(setupDshProfile({
-      dshHome: home,
-      log: () => {},
-      install: async () => {},
-      verify: async () => {}
+      ...options(home),
+      install: async () => {}
     })).rejects.toThrow("profile install incomplete");
   });
 });

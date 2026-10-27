@@ -28,18 +28,26 @@ function manifestPath(cacheDir) {
   return path.join(cacheDir, MANIFEST_NAME);
 }
 
+function realtimeAccelerationArgs(env = process.env, platform = process.platform) {
+  const preference = String(env.GALCODE_GPU || "auto").toLowerCase();
+  if (["swiftshader", "software", "off"].includes(preference)) return [];
+  if (preference === "metal" || (preference === "auto" && platform === "darwin")) {
+    return ["--use-angle=metal", "--enable-gpu"];
+  }
+  return [];
+}
+
 // Base launch flags shared by realtime and deterministic recording. These are
 // the WebGAL-proven Electron switches ported to plain Chromium.
-function baseLaunchArgs({ width, height }) {
+function baseLaunchArgs({ width, height, acceleration = true }) {
   return [
     "--disable-background-timer-throttling",
     "--disable-renderer-backgrounding",
     "--disable-backgrounding-occluded-windows",
     "--autoplay-policy=no-user-gesture-required",
     "--force-device-scale-factor=1",
-    // Software WebGL (Live2D) needs SwiftShader in headless environments;
-    // newer Chrome requires the explicit opt-in flag.
     "--enable-unsafe-swiftshader",
+    ...(acceleration ? realtimeAccelerationArgs() : []),
     `--window-size=${width},${height}`,
     "--hide-scrollbars"
   ];
@@ -60,8 +68,12 @@ export function deterministicLaunchArgs() {
   ];
 }
 
-export function launchArgsForMode(mode, { width, height } = {}) {
-  const base = baseLaunchArgs({ width: width || 1280, height: height || 720 });
+export function launchArgsForMode(mode, { width, height, acceleration = true } = {}) {
+  const base = baseLaunchArgs({
+    width: width || 1280,
+    height: height || 720,
+    acceleration: mode === "realtime" && acceleration
+  });
   return mode === "deterministic" ? [...base, ...deterministicLaunchArgs()] : base;
 }
 
@@ -110,17 +122,27 @@ export async function probeBrowserCapabilities(executablePath, { launchImpl } = 
 
 export async function launchRecorderBrowser({ executablePath, mode = "realtime", width, height, launchImpl, noSandbox = false }) {
   const launch = launchImpl || defaultLaunch;
-  return await launch(executablePath, launchArgsForMode(mode, { width, height }), { noSandbox });
+  try {
+    return await launch(executablePath, launchArgsForMode(mode, { width, height }), { noSandbox });
+  } catch (error) {
+    if (mode !== "realtime" || realtimeAccelerationArgs().length === 0) throw error;
+    return await launch(executablePath, launchArgsForMode(mode, { width, height, acceleration: false }), { noSandbox });
+  }
 }
 // spawns chrome detached on POSIX and kills the process group on close(); the
 // killChildTree fallback covers a wedged renderer that ignores close().
 export async function closeBrowserTree(browser, { graceMs = 5000 } = {}) {
   if (!browser) return;
   const proc = typeof browser.process === "function" ? browser.process() : null;
-  await Promise.race([
-    browser.close().catch(() => {}),
-    new Promise((resolve) => setTimeout(resolve, graceMs))
-  ]);
+  let timer;
+  try {
+    await Promise.race([
+      browser.close().catch(() => {}),
+      new Promise((resolve) => { timer = setTimeout(resolve, graceMs); })
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
   if (proc && proc.exitCode === null && proc.signalCode === null) {
     killChildTree(proc, "SIGKILL");
   }

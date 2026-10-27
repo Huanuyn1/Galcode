@@ -7,6 +7,7 @@ import {
   clickElementByText,
   startVirtualAutoAdvance,
   readVirtualClock,
+  setVirtualClockScale,
   probePageCubismCore
 } from "./webgal-page.mjs";
 import { live2dCoreMismatchWarning } from "../live2d-compat.mjs";
@@ -21,8 +22,8 @@ import { live2dCoreMismatchWarning } from "../live2d-compat.mjs";
 // beginFrame call hands back. <audio>/<video> stay frozen — fine, the
 // soundtrack is post-mixed anyway.
 //
-// Dialogue advance is driven from OUTSIDE on the same clock: a rAF-counting
-// advancer injects Space every N frames (see startVirtualAutoAdvance).
+// New Galcode scripts advance through their own timed text/wait performs.
+// Legacy scripts keep the external rAF-counting Space advancer.
 
 const TITLE_SELECTOR = ".Title_button, [class*=\"Title_button\"]";
 const CANVAS_SELECTOR = "#pixiCanvas, canvas";
@@ -37,6 +38,7 @@ export async function recordDeterministic({
   height,
   fps,
   durationSec,
+  scriptTimed = false,
   ffmpeg = "ffmpeg",
   crf = 18,
   jpegQuality = 92,
@@ -150,13 +152,16 @@ export async function recordDeterministic({
       }
     }
 
-    // Virtual-clock auto-advancer + rAF liveness self-check: if rAF does not
-    // follow beginFrame, WebGAL (PIXI) cannot animate and this mode is a
-    // dead end — fail honestly instead of recording a frozen frame.
-    await startVirtualAutoAdvance(page, Math.max(1, Math.round(autoAdvanceSec * fps)));
-    await pump(Math.max(4, Math.round(fps)));
-    const clock = await readVirtualClock(page);
-    if (clock.rafTicks === 0) {
+    if (!scriptTimed) {
+      await startVirtualAutoAdvance(page, Math.max(1, Math.round(autoAdvanceSec * fps)));
+    }
+    await page.evaluate(() => {
+      window.__galcodeRafProbe = 0;
+      window.requestAnimationFrame(() => { window.__galcodeRafProbe += 1; });
+    });
+    await pumpFrame(false);
+    const rafTicks = await page.evaluate(() => window.__galcodeRafProbe || 0);
+    if (rafTicks === 0) {
       throw new Error([
         "Deterministic mode self-check failed: requestAnimationFrame did not advance under",
         "HeadlessExperimental.beginFrame on this build, so WebGAL's PIXI stage would stay frozen.",
@@ -164,11 +169,20 @@ export async function recordDeterministic({
       ].join(" "));
     }
 
-    // Scene settle: give WebGAL the same ~8s the old recorder allowed, but in
-    // virtual frames so everything (enter animations, typewriter) advances.
     const settleFrames = Math.round((sceneDelayMs / 1000) * fps);
-    log(`Deterministic: pumping ${settleFrames} settle frames (${sceneDelayMs} ms virtual)`);
-    await pump(settleFrames);
+    if (scriptTimed) {
+      await setVirtualClockScale(page, 0);
+      const warmupFrames = Math.max(2, Math.round(fps / 4));
+      log(`Deterministic: warming up ${warmupFrames} frames with story clock held, then waiting for assets`);
+      await pump(warmupFrames);
+      await page.waitForNetworkIdle({ idleTime: 500, timeout: Math.max(1000, sceneDelayMs) }).catch((error) => {
+        log(`Deterministic: asset wait ended early (${error.message}); starting with the story clock held no longer`);
+      });
+      await setVirtualClockScale(page, 1);
+    } else {
+      log(`Deterministic: pumping ${settleFrames} settle frames (${sceneDelayMs} ms virtual)`);
+      await pump(settleFrames);
+    }
 
     const totalFrames = Math.max(1, Math.round(durationSec * fps));
     const encoder = startMjpegEncoder({ ffmpeg, out, fps, crf, log });
