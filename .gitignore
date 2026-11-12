@@ -16,3 +16,7 @@ vendor/
 figure/mygo/
 figure/_mtn_exp/
 figure/chara/
+
+# Keep user-added music local; the bundled example remains tracked.
+figure/bgm/*
+!figure/bgm/s_Title.mp3

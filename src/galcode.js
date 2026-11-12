@@ -388,8 +388,8 @@ Usage:
   galcode setup --root vendor
   galcode download-assets --target mygoxmujica
   galcode install-live2d-runtime --from /path/to/live2d-sdk-lib
-  galcode prepare-live2d --limit 4
-  galcode index --out work/asset-manifest.json
+  galcode prepare-live2d figure --limit 4
+  galcode index figure --out work/asset-manifest.json
   galcode discuss
   galcode yolo
   galcode make --mode yolo --theme "灯和爱音雨夜和解" --duration 180

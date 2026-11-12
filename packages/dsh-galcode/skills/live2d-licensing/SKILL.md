@@ -29,8 +29,9 @@ galcode cli install-live2d-runtime --from /path/to/live2d-sdk-lib
 
 ## 模型素材
 
-- 模型以 Cubism 2/3/4 的 zip 压缩包形式放在素材目录里时,`galcode cli prepare-live2d`(或生成时自动)会把可渲染的包解压到 `.galcode/live2d-cache` 并挂载到编译产物的 `game/figure/live2d/`。
-- 公开仓库自带一个最小占位清单;没有官方模型时故事仍然可以编译——编译器会把缺失的立绘降级处理。告诉用户:想要完整 Live2D 画面,需要自行准备模型压缩包与上述运行时文件。
+- 模型以 Cubism 2/3/4 的 zip 压缩包形式放在素材目录里时,`galcode cli prepare-live2d figure`(或生成时自动)会把可渲染的包解压到 `.galcode/live2d-cache` 并挂载到编译产物的 `game/figure/live2d/`。
+- 解压后的 chara 模型也可直接放入 `figure/chara/<角色>/<服装>/`,保留完整模型、贴图、动作、表情及共享目录。新素材在下次索引、生成或编译时生效,无需重启 TUI。添加方法见 `figure/README.md`。
+- 公开仓库自带一个最小占位清单;没有官方模型时故事仍然可以编译——编译器会把缺失的立绘降级处理。告诉用户:想要完整 Live2D 画面,需要自行准备模型压缩包或完整解压目录,以及上述运行时文件。
 
 ## 排查清单
 

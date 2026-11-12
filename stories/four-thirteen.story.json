@@ -1,0 +1,781 @@
+{
+  "title": "四分十三秒",
+  "description": "MyGO！！！！！ 的五个人替 Galcode 拍一支复出公告：从 0.1 的桌面程序讲到 0.2 的减法、1.0 的编译器和 1.1 的许愿式创作，最后在河边留下一句作者的心里话。全长与《The Sorcerer》等长，4：13。",
+  "durationSec": 253,
+  "characters": [
+    "千早爱音",
+    "长崎爽世",
+    "椎名立希",
+    "要乐奈",
+    "高松灯"
+  ],
+  "direction": {
+    "premise": "五个人替 Galcode 拍一支“复出公告”。越往下讲，它越不像公告：版本号背后是一次删减、一次重写、一次把功劳推给别人的致谢，最后变成作者留在片尾的一句心里话。",
+    "characterArcs": [
+      {
+        "character": "千早爱音",
+        "want": "把“Galcode 回来了”讲得热闹，像一场复出",
+        "need": "承认项目确实停过，也承认自己被这些回忆留住",
+        "defense": "主持腔、抢话、怼人、把话题推回项目",
+        "change": "结尾放下腔调，说“请记得她们”"
+      },
+      {
+        "character": "长崎爽世",
+        "want": "把 0.1 到 0.2 的减法讲准确，不美化",
+        "need": "承认“讣告”这个比喻没说错",
+        "defense": "完整的技术措辞和礼貌的距离",
+        "change": "认下这个比喻，然后把话讲完"
+      },
+      {
+        "character": "椎名立希",
+        "want": "把 1.0 真正的难点——编译器——讲清楚",
+        "need": "允许自己当众夸人",
+        "defense": "直接、报数据、拆台",
+        "change": "公开感谢“鼓手朋友”，再补一句认真建议"
+      },
+      {
+        "character": "要乐奈",
+        "want": "待在舒服的地方，问想问的问题",
+        "need": "不替谁调解，只把真话放到桌上",
+        "defense": "短句和食物",
+        "change": "说出“爱音，很高兴”，再问“那我该怎么使用”"
+      },
+      {
+        "character": "高松灯",
+        "want": "把作者那句心里话带到片尾",
+        "need": "把最后一段交还给观众",
+        "defense": "轻声、慢、先重复关键词",
+        "change": "说完“希望各位还能用这些工具，创造新的回忆”"
+      }
+    ]
+  },
+  "scenes": [
+    {
+      "id": "greenroom-comeback",
+      "title": "片场：先做减法",
+      "backgroundAssetId": "figure-背景-摄影地休息室-jpg-0ca8630ef40293e9",
+      "bgmAssetId": "figure-bgm-the-sorcerer-mp3-533a7c2bd9364d00",
+      "direction": {
+        "pov": "千早爱音",
+        "goal": "把“Galcode 回来了”说得热闹，像一场复出。",
+        "obstacle": "爽世只承认它停过很久，还顺手把“讣告”这个比喻认了下来。",
+        "turn": "0.2 不是复出，是先做减法——砍到只剩一个能和 dsh 对齐的壳。",
+        "exitState": "爱音第一次没接住话，只能问“那为什么当时不发视频”。"
+      },
+      "actions": [
+        {
+          "type": "figure",
+          "character": "千早爱音",
+          "assetId": "figure-chara-anon-casual-spring-01-adv-live2d-anon-002-casual-spring-01-model3-json-93de61157d41e877",
+          "position": "left",
+          "acting": {
+            "gesture": "kime",
+            "expression": "smile",
+            "gaze": "audience",
+            "intensity": "high"
+          },
+          "expression": "exp_smile01"
+        },
+        {
+          "type": "narration",
+          "text": "休息室里，爱音把手机架在三个纸杯上。",
+          "durationSec": 4.5
+        },
+        {
+          "type": "line",
+          "speaker": "千早爱音",
+          "text": "大家好，我是千早爱音！大家期待的 Galcode 时隔不知道几个月又回来了！",
+          "subtext": "她先把“回来了”喊出来，别让人听出她也不确定还有多少人在等。",
+          "durationSec": 7.0
+        },
+        {
+          "type": "figure",
+          "character": "长崎爽世",
+          "assetId": "figure-chara-soyo-casual-spring-01-adv-live2d-soyo-004-casual-spring-01-model3-json-70338f3706b1d1bf",
+          "position": "right",
+          "acting": {
+            "gesture": "check",
+            "expression": "idle",
+            "gaze": "left",
+            "intensity": "medium"
+          }
+        },
+        {
+          "type": "line",
+          "speaker": "长崎爽世",
+          "text": "真的有人在期待嘛……",
+          "subtext": "她只说了半句，剩下的留给爱音自己心虚。",
+          "durationSec": 3.5
+        },
+        {
+          "type": "figure",
+          "character": "千早爱音",
+          "assetId": "figure-chara-anon-casual-spring-01-adv-live2d-anon-002-casual-spring-01-model3-json-93de61157d41e877",
+          "position": "left",
+          "acting": {
+            "gesture": "denial",
+            "expression": "upset",
+            "gaze": "right",
+            "intensity": "medium"
+          }
+        },
+        {
+          "type": "line",
+          "speaker": "千早爱音",
+          "text": "喂，soyorin！作者只是去沉淀了，你怎么就像给这个项目在念讣告！",
+          "subtext": "用玩笑把“沉淀”这个词护住，其实她也在意这段空白。",
+          "durationSec": 6.5
+        },
+        {
+          "type": "figure",
+          "character": "长崎爽世",
+          "assetId": "figure-chara-soyo-casual-spring-01-adv-live2d-soyo-004-casual-spring-01-model3-json-70338f3706b1d1bf",
+          "position": "right",
+          "acting": {
+            "gesture": "thinking",
+            "expression": "serious",
+            "gaze": "left",
+            "intensity": "medium"
+          }
+        },
+        {
+          "type": "line",
+          "speaker": "长崎爽世",
+          "text": "讣告……你这个比喻还真没说错……Galcode v0.1 是个桌面程序，然而……",
+          "subtext": "她认了这个比喻，是她少见的诚实。",
+          "durationSec": 8.5
+        },
+        {
+          "type": "figure",
+          "character": "千早爱音",
+          "assetId": "figure-chara-anon-casual-spring-01-adv-live2d-anon-002-casual-spring-01-model3-json-93de61157d41e877",
+          "position": "left",
+          "acting": {
+            "gesture": "question",
+            "expression": "upset",
+            "gaze": "right",
+            "intensity": "medium"
+          }
+        },
+        {
+          "type": "line",
+          "speaker": "千早爱音",
+          "text": "然而什么啊？soyorin 你快别卖关子了！",
+          "subtext": "她真的想知道，但更怕听到“没有为什么”。",
+          "durationSec": 5.0
+        },
+        {
+          "type": "figure",
+          "character": "长崎爽世",
+          "assetId": "figure-chara-soyo-casual-spring-01-adv-live2d-soyo-004-casual-spring-01-model3-json-70338f3706b1d1bf",
+          "position": "right",
+          "acting": {
+            "gesture": "idle",
+            "expression": "serious",
+            "gaze": "left",
+            "intensity": "medium"
+          }
+        },
+        {
+          "type": "line",
+          "speaker": "长崎爽世",
+          "text": "GUI 的跨平台是天坑。考虑到大部分作者用 Windows PC 做视频，技术栈需要重新考量。",
+          "subtext": "技术原因她讲得很干，因为这一段她自己也不喜欢。",
+          "durationSec": 8.0
+        },
+        {
+          "type": "figure",
+          "character": "千早爱音",
+          "assetId": "figure-chara-anon-casual-spring-01-adv-live2d-anon-002-casual-spring-01-model3-json-93de61157d41e877",
+          "position": "left",
+          "acting": {
+            "gesture": "surprised",
+            "expression": "surprised",
+            "gaze": "right",
+            "intensity": "medium"
+          }
+        },
+        {
+          "type": "line",
+          "speaker": "千早爱音",
+          "text": "诶？？然后呢！",
+          "subtext": "她只是在捧哏，等一个能继续讲下去的转折。",
+          "durationSec": 3.5
+        },
+        {
+          "type": "figure",
+          "character": "长崎爽世",
+          "assetId": "figure-chara-soyo-casual-spring-01-adv-live2d-soyo-004-casual-spring-01-model3-json-70338f3706b1d1bf",
+          "position": "right",
+          "acting": {
+            "gesture": "idle",
+            "expression": "sad",
+            "gaze": "left",
+            "intensity": "low"
+          }
+        },
+        {
+          "type": "line",
+          "speaker": "长崎爽世",
+          "text": "接着是 v0.2 的大幅度重构。huanuyn 是这么说的——先做减法。",
+          "subtext": "把作者的原话搬出来，等于把责任交出去。",
+          "durationSec": 6.5
+        },
+        {
+          "type": "figure",
+          "character": "千早爱音",
+          "assetId": "figure-chara-anon-casual-spring-01-adv-live2d-anon-002-casual-spring-01-model3-json-93de61157d41e877",
+          "position": "left",
+          "acting": {
+            "gesture": "thinking",
+            "expression": "thinking",
+            "gaze": "right",
+            "intensity": "medium"
+          }
+        },
+        {
+          "type": "line",
+          "speaker": "千早爱音",
+          "text": "原来是这样。那为什么不在 v0.2 的时候发视频介绍？",
+          "subtext": "她问的是版本，也是在问“那我们算什么”。",
+          "durationSec": 5.5
+        },
+        {
+          "type": "figure",
+          "character": "长崎爽世",
+          "assetId": "figure-chara-soyo-casual-spring-01-adv-live2d-soyo-004-casual-spring-01-model3-json-70338f3706b1d1bf",
+          "position": "right",
+          "acting": {
+            "gesture": "idle",
+            "expression": "smile",
+            "gaze": "left",
+            "intensity": "low"
+          },
+          "expression": "exp_smile01"
+        },
+        {
+          "type": "line",
+          "speaker": "长崎爽世",
+          "text": "因为 v0.2 几乎砍掉了所有功能。一切都是为了与 dsh 对齐，让它成为 dsh 海量生态库里的一员。",
+          "subtext": "她笑得客气，说的是“成为一员”，听起来却像“先消失一阵”。",
+          "durationSec": 8.5
+        }
+      ]
+    },
+    {
+      "id": "makeup-v1",
+      "title": "化妆间：录制不难",
+      "backgroundAssetId": "figure-背景-化妆间-png-b65a4bcb0689cf0f",
+      "direction": {
+        "pov": "椎名立希",
+        "goal": "把 1.0 真正的难点——编译器——讲清楚。",
+        "obstacle": "爱音只关心“能录了吗”，还想把功劳都算在录制上。",
+        "turn": "立希报出提速数字，又把功劳推给“鼓手朋友”，罕见地夸了人。",
+        "exitState": "话题滑向真实的模型与成本，爱音开始追问。"
+      },
+      "actions": [
+        {
+          "type": "figure",
+          "character": "椎名立希",
+          "assetId": "figure-chara-taki-casual-spring-01-adv-live2d-taki-005-casual-spring-01-model3-json-47317dd62521a8fb",
+          "position": "right",
+          "acting": {
+            "gesture": "serious",
+            "expression": "serious",
+            "gaze": "left",
+            "intensity": "medium"
+          }
+        },
+        {
+          "type": "narration",
+          "text": "化妆间的镜子亮着。立希把手机从镜子前挪开。",
+          "durationSec": 5.0
+        },
+        {
+          "type": "line",
+          "speaker": "椎名立希",
+          "text": "爱音。下面我们正式向各位介绍 Galcode v1.0 正式版。",
+          "subtext": "对着镜头说正式台词，比对着观众还让她别扭。",
+          "durationSec": 6.5
+        },
+        {
+          "type": "figure",
+          "character": "千早爱音",
+          "assetId": "figure-chara-anon-casual-spring-01-adv-live2d-anon-002-casual-spring-01-model3-json-93de61157d41e877",
+          "position": "left",
+          "acting": {
+            "gesture": "nod",
+            "expression": "smile",
+            "gaze": "right",
+            "intensity": "high"
+          },
+          "expression": "exp_smile01"
+        },
+        {
+          "type": "line",
+          "speaker": "千早爱音",
+          "text": "……好。1.0，正式版。这回总该会录制了吧？这是我们的主打功能！",
+          "subtext": "她想把气氛拉回来，顺便把“主打功能”说得响一点。",
+          "durationSec": 8.0
+        },
+        {
+          "type": "figure",
+          "character": "椎名立希",
+          "assetId": "figure-chara-taki-casual-spring-01-adv-live2d-taki-005-casual-spring-01-model3-json-47317dd62521a8fb",
+          "position": "right",
+          "acting": {
+            "gesture": "thinking",
+            "expression": "serious",
+            "gaze": "left",
+            "intensity": "medium"
+          }
+        },
+        {
+          "type": "line",
+          "speaker": "椎名立希",
+          "text": "确实。不过呢……",
+          "subtext": "“不过”后面才是她真正想说的。",
+          "durationSec": 3.5
+        },
+        {
+          "type": "figure",
+          "character": "千早爱音",
+          "assetId": "figure-chara-anon-casual-spring-01-adv-live2d-anon-002-casual-spring-01-model3-json-93de61157d41e877",
+          "position": "left",
+          "acting": {
+            "gesture": "question",
+            "expression": "upset",
+            "gaze": "right",
+            "intensity": "medium"
+          }
+        },
+        {
+          "type": "line",
+          "speaker": "千早爱音",
+          "text": "不过什么？",
+          "subtext": "她开始预感到不好。",
+          "durationSec": 2.5
+        },
+        {
+          "type": "figure",
+          "character": "椎名立希",
+          "assetId": "figure-chara-taki-casual-spring-01-adv-live2d-taki-005-casual-spring-01-model3-json-47317dd62521a8fb",
+          "position": "right",
+          "acting": {
+            "gesture": "serious",
+            "expression": "serious",
+            "gaze": "left",
+            "intensity": "medium"
+          }
+        },
+        {
+          "type": "line",
+          "speaker": "椎名立希",
+          "text": "录制不难，写一个成功的编译器很难。现在编译器把每句算成时间线，画面按帧。",
+          "subtext": "她把“难”说得很轻，因为那是她真的佩服的东西。",
+          "durationSec": 7.0
+        },
+        {
+          "type": "line",
+          "speaker": "椎名立希",
+          "text": "五秒 720p60，采集从三十八秒半到五秒二七。以前模型老卡成一张图，也顺手修了。",
+          "subtext": "报数字是她唯一不别扭的炫耀。",
+          "durationSec": 8.0
+        },
+        {
+          "type": "figure",
+          "character": "千早爱音",
+          "assetId": "figure-chara-anon-casual-spring-01-adv-live2d-anon-002-casual-spring-01-model3-json-93de61157d41e877",
+          "position": "left",
+          "acting": {
+            "gesture": "surprised",
+            "expression": "surprised",
+            "gaze": "right",
+            "intensity": "medium"
+          }
+        },
+        {
+          "type": "line",
+          "speaker": "千早爱音",
+          "text": "！？快快？！",
+          "subtext": "她其实没听懂，只是被速度吓到了。",
+          "durationSec": 4.0
+        },
+        {
+          "type": "figure",
+          "character": "椎名立希",
+          "assetId": "figure-chara-taki-casual-spring-01-adv-live2d-taki-005-casual-spring-01-model3-json-47317dd62521a8fb",
+          "position": "right",
+          "acting": {
+            "gesture": "nod",
+            "expression": "smile",
+            "gaze": "left",
+            "intensity": "low"
+          },
+          "expression": "exp_smile01"
+        },
+        {
+          "type": "line",
+          "speaker": "椎名立希",
+          "text": "是的。感谢我们的鼓手朋友杨植麟，非常好的 k3.1pro 带给大家！",
+          "subtext": "把功劳往外推，再顺手开个玩笑——这是她说谢谢的方式。",
+          "durationSec": 6.5
+        },
+        {
+          "type": "figure",
+          "character": "千早爱音",
+          "assetId": "figure-chara-anon-casual-spring-01-adv-live2d-anon-002-casual-spring-01-model3-json-93de61157d41e877",
+          "position": "left",
+          "acting": {
+            "gesture": "angry",
+            "expression": "upset",
+            "gaze": "right",
+            "intensity": "medium"
+          }
+        },
+        {
+          "type": "line",
+          "speaker": "千早爱音",
+          "text": "好在哪？天天 429！",
+          "subtext": "抓到机会就怼，这是她们的日常。",
+          "durationSec": 3.5
+        },
+        {
+          "type": "figure",
+          "character": "椎名立希",
+          "assetId": "figure-chara-taki-casual-spring-01-adv-live2d-taki-005-casual-spring-01-model3-json-47317dd62521a8fb",
+          "position": "right",
+          "acting": {
+            "gesture": "angry",
+            "expression": "angry",
+            "gaze": "left",
+            "intensity": "medium"
+          }
+        },
+        {
+          "type": "line",
+          "speaker": "椎名立希",
+          "text": "缺卡是这样的……虽然我们选择接入 dsh，但在创意文本生成的工作里，还是建议大家选大参数的模型。",
+          "subtext": "被戳到痛处，但还是把建议认真说完了。",
+          "durationSec": 9.5
+        }
+      ]
+    },
+    {
+      "id": "stage-usability",
+      "title": "舞台：人和 AI 写的",
+      "backgroundAssetId": "figure-背景-大桌子演出舞台-jpg-dd8d2ebf69dfb367",
+      "direction": {
+        "pov": "要乐奈",
+        "goal": "爱音把 1.1 讲成“人人可用”的创作工具。",
+        "obstacle": "乐奈坐在讲解用的桌子上，一句“人和 AI 写的，有差距”把话题拽回地面。",
+        "turn": "乐奈说“爱音，很高兴”，爱音被夸得不知道该怎么接。",
+        "exitState": "爱音终于把“怎么用”讲成了具体的话。"
+      },
+      "actions": [
+        {
+          "type": "figure",
+          "character": "要乐奈",
+          "assetId": "figure-chara-rana-casual-spring-01-adv-live2d-rana-003-casual-spring-01-model3-json-b355465519963cf5",
+          "position": "right",
+          "acting": {
+            "gesture": "idle",
+            "expression": "idle",
+            "gaze": "left",
+            "intensity": "medium"
+          }
+        },
+        {
+          "type": "narration",
+          "text": "舞台的长桌空着。乐奈坐在桌沿，晃着脚。",
+          "durationSec": 5.0
+        },
+        {
+          "type": "line",
+          "speaker": "要乐奈",
+          "text": "爱音，怎么了。",
+          "subtext": "她真的只是路过坐下，没觉得占了什么地方。",
+          "durationSec": 3.0
+        },
+        {
+          "type": "figure",
+          "character": "千早爱音",
+          "assetId": "figure-chara-anon-casual-spring-01-adv-live2d-anon-002-casual-spring-01-model3-json-93de61157d41e877",
+          "position": "left",
+          "acting": {
+            "gesture": "angry",
+            "expression": "upset",
+            "gaze": "right",
+            "intensity": "medium"
+          }
+        },
+        {
+          "type": "line",
+          "speaker": "千早爱音",
+          "text": "乐奈酱！那是我们讲解用的桌子！",
+          "subtext": "她在努力维持“节目”的秩序。",
+          "durationSec": 4.0
+        },
+        {
+          "type": "figure",
+          "character": "千早爱音",
+          "assetId": "figure-chara-anon-casual-spring-01-adv-live2d-anon-002-casual-spring-01-model3-json-93de61157d41e877",
+          "position": "left",
+          "acting": {
+            "gesture": "nod",
+            "expression": "serious",
+            "gaze": "right",
+            "intensity": "medium"
+          }
+        },
+        {
+          "type": "line",
+          "speaker": "千早爱音",
+          "text": "最后要给大家介绍：Galcode v1.1 不只让它出片，更让它易用。huanuyn 认为，LLM 在创意工作里能起到很大的作用——Galcode 并非程序员的专属，许愿式创作并不局限于 coding。",
+          "subtext": "这段话她背了很久，只有最后半句是她自己的语气。",
+          "durationSec": 15.0
+        },
+        {
+          "type": "figure",
+          "character": "要乐奈",
+          "assetId": "figure-chara-rana-casual-spring-01-adv-live2d-rana-003-casual-spring-01-model3-json-b355465519963cf5",
+          "position": "right",
+          "acting": {
+            "gesture": "serious",
+            "expression": "serious",
+            "gaze": "left",
+            "intensity": "medium"
+          }
+        },
+        {
+          "type": "line",
+          "speaker": "要乐奈",
+          "text": "不过，人和 AI 写的，有差距。",
+          "subtext": "她只关心一件最要紧的事，而且说得很轻。",
+          "durationSec": 4.0
+        },
+        {
+          "type": "figure",
+          "character": "千早爱音",
+          "assetId": "figure-chara-anon-casual-spring-01-adv-live2d-anon-002-casual-spring-01-model3-json-93de61157d41e877",
+          "position": "left",
+          "acting": {
+            "gesture": "nod",
+            "expression": "smile",
+            "gaze": "right",
+            "intensity": "low"
+          },
+          "expression": "exp_smile01"
+        },
+        {
+          "type": "line",
+          "speaker": "千早爱音",
+          "text": "对！小乐奈的确没说错。所以我们更建议你先写好大纲，再丢给 LLM。另外，创作不是一轮定胜负——你可以在与 LLM 的交互里多轮迭代，生成一个视频的成本很低！",
+          "subtext": "她顺着乐奈的话往下讲，态度比刚才真。",
+          "durationSec": 13.0
+        },
+        {
+          "type": "figure",
+          "character": "要乐奈",
+          "assetId": "figure-chara-rana-casual-spring-01-adv-live2d-rana-003-casual-spring-01-model3-json-b355465519963cf5",
+          "position": "right",
+          "acting": {
+            "gesture": "smile",
+            "expression": "smile",
+            "gaze": "left",
+            "intensity": "low"
+          }
+        },
+        {
+          "type": "line",
+          "speaker": "要乐奈",
+          "text": "爱音，很高兴。",
+          "subtext": "她不常说这种话，说完自己也愣了一下。",
+          "durationSec": 3.0
+        },
+        {
+          "type": "figure",
+          "character": "千早爱音",
+          "assetId": "figure-chara-anon-casual-spring-01-adv-live2d-anon-002-casual-spring-01-model3-json-93de61157d41e877",
+          "position": "left",
+          "acting": {
+            "gesture": "denial",
+            "expression": "shy",
+            "gaze": "right",
+            "intensity": "low"
+          }
+        },
+        {
+          "type": "line",
+          "speaker": "千早爱音",
+          "text": "嘿嘿，这不是好久没更新了嘛。",
+          "subtext": "被夸了反而不知道怎么接，只能把话题推回项目上。",
+          "durationSec": 4.0
+        },
+        {
+          "type": "figure",
+          "character": "要乐奈",
+          "assetId": "figure-chara-rana-casual-spring-01-adv-live2d-rana-003-casual-spring-01-model3-json-b355465519963cf5",
+          "position": "right",
+          "acting": {
+            "gesture": "question",
+            "expression": "idle",
+            "gaze": "left",
+            "intensity": "medium"
+          }
+        },
+        {
+          "type": "line",
+          "speaker": "要乐奈",
+          "text": "那我该怎么使用。",
+          "subtext": "她一直在听，而且听懂了。",
+          "durationSec": 3.0
+        },
+        {
+          "type": "figure",
+          "character": "千早爱音",
+          "assetId": "figure-chara-anon-casual-spring-01-adv-live2d-anon-002-casual-spring-01-model3-json-93de61157d41e877",
+          "position": "left",
+          "acting": {
+            "gesture": "nod",
+            "expression": "serious",
+            "gaze": "audience",
+            "intensity": "medium"
+          }
+        },
+        {
+          "type": "line",
+          "speaker": "千早爱音",
+          "text": "有一定计算机操作基础的同学，可以直接去仓库克隆源码、看 README；没有基础的，把仓库地址发给 dsh，让它自己加就行。",
+          "subtext": "这段是给观众说的，她终于说得像个能帮上忙的人。",
+          "durationSec": 9.0
+        }
+      ]
+    },
+    {
+      "id": "river-afterword",
+      "title": "河边：请记得她们",
+      "backgroundAssetId": "figure-背景-滨河栏杆处-jpg-7b9c3fb73db1b51d",
+      "direction": {
+        "pov": "高松灯",
+        "goal": "爱音想把片子收尾，把话交回给观众。",
+        "obstacle": "灯说的是作者的心里话，不是任何一个功能介绍。",
+        "turn": "爱音没法用主持腔接这句话，只能说“请记得她们”。",
+        "exitState": "歌走到最后一个和弦，屏幕停在四分十三秒。"
+      },
+      "actions": [
+        {
+          "type": "figure",
+          "character": "高松灯",
+          "assetId": "figure-chara-tomorin-casual-spring-01-adv-live2d-tomori-001-casual-spring-01-model3-json-8ab854d9a15cc425",
+          "position": "right",
+          "acting": {
+            "gesture": "idle",
+            "expression": "idle",
+            "gaze": "audience",
+            "intensity": "medium"
+          }
+        },
+        {
+          "type": "narration",
+          "text": "河边风大。灯站在栏杆前。",
+          "durationSec": 5.0
+        },
+        {
+          "type": "line",
+          "speaker": "高松灯",
+          "text": "其实，最后说点心里话。huanuyn 已经好久没看过二创了。",
+          "subtext": "她替作者把这句话带到这里，说得很慢。",
+          "durationSec": 8.0
+        },
+        {
+          "type": "figure",
+          "character": "千早爱音",
+          "assetId": "figure-chara-anon-casual-spring-01-adv-live2d-anon-002-casual-spring-01-model3-json-93de61157d41e877",
+          "position": "left",
+          "acting": {
+            "gesture": "idle",
+            "expression": "sad",
+            "gaze": "right",
+            "intensity": "low"
+          }
+        },
+        {
+          "type": "line",
+          "speaker": "千早爱音",
+          "text": "……嘛，的确是这样的吧。人的兴趣都会随着时间衰退……",
+          "subtext": "她没法用主持腔接这句话，只能先承认。",
+          "durationSec": 9.0
+        },
+        {
+          "type": "figure",
+          "character": "千早爱音",
+          "assetId": "figure-chara-anon-casual-spring-01-adv-live2d-anon-002-casual-spring-01-model3-json-93de61157d41e877",
+          "position": "left",
+          "acting": {
+            "gesture": "serious",
+            "expression": "sad",
+            "gaze": "audience",
+            "intensity": "low"
+          }
+        },
+        {
+          "type": "line",
+          "speaker": "千早爱音",
+          "text": "但是，那些留下的、珍贵的美好回忆是真的！欢乐也好，痛苦也罢，请记得她们吧……",
+          "subtext": "她说的“记得她们”，也是说给自己听的。",
+          "durationSec": 10.0
+        },
+        {
+          "type": "figure",
+          "character": "高松灯",
+          "assetId": "figure-chara-tomorin-casual-spring-01-adv-live2d-tomori-001-casual-spring-01-model3-json-8ab854d9a15cc425",
+          "position": "right",
+          "acting": {
+            "gesture": "smile",
+            "expression": "smile",
+            "gaze": "left",
+            "intensity": "low"
+          }
+        },
+        {
+          "type": "line",
+          "speaker": "高松灯",
+          "text": "……言止于此。最后一段显得有点莫名其妙，但的确是作者的心里话吧。希望各位还能用这些工具，创造新的回忆。",
+          "subtext": "灯把最后一段交还给观众，也把灯留在了这里。",
+          "durationSec": 13.5
+        },
+        {
+          "type": "wait",
+          "durationSec": 2.5
+        },
+        {
+          "type": "narration",
+          "text": "歌走到最后一个和弦。手机屏幕上的数字，停在四分十三秒。",
+          "durationSec": 8.0
+        }
+      ]
+    }
+  ],
+  "bgm": [
+    {
+      "assetName": "The Sorcerer.mp3",
+      "startSec": 0,
+      "endSec": 253,
+      "volume": 0.26,
+      "fadeIn": 1.5,
+      "fadeOut": 5
+    }
+  ],
+  "video": {
+    "title": "四分十三秒 | MyGO!!!!! 替 Galcode 写了篇复出公告",
+    "description": "从 0.1 的桌面程序到 1.1 的许愿式创作，五个人用一首 4：13 的歌把 Galcode 的版本史讲完。非商业同人作品。",
+    "tags": [
+      "Galcode",
+      "WebGAL",
+      "MyGO",
+      "同人",
+      "Live2D"
+    ]
+  }
+}

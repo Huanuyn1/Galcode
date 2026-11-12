@@ -98,9 +98,18 @@ TUI 里的 agent 使用 `galcode` 预设：人格移植自旧版 writer/discuss/
 
 - **runtime**：从合法渠道获得两个 runtime 文件后，运行
   `galcode cli install-live2d-runtime --from <所在目录>`，它们会被复制到 WebGAL 引擎的 `public/lib/`。
-- **模型包**：官方模型以 Cubism 2/3/4 zip 压缩包形式放进素材目录（`figure/`）后，`galcode cli prepare-live2d`（或生成时自动）会把可渲染的包解压到 `.galcode/live2d-cache` 并挂载进编译产物。
+- **模型包**：官方模型以 Cubism 2/3/4 zip 压缩包形式放进素材目录（`figure/`）后，`galcode cli prepare-live2d figure`（或生成时自动）会把可渲染的包解压到 `.galcode/live2d-cache` 并挂载进编译产物。
 - **获取方式**：需要完整演示素材的用户，请移步作者 B 站账号观看本项目介绍视频，并按视频里的进群方式获取完整文件。
 - **没有这些文件也能用**：缺少 runtime 时 WebGAL 会静默禁用 Live2D——预览里只有背景和文字，故事本身照常编译、照常播放。TUI 里的 agent 通过 `live2d-licensing` 技能了解这套边界，会在素材缺失时主动告诉你缺什么、去哪补。
+
+## 添加自己的背景、BGM 和 Live2D
+
+- 场景图放入 `figure/背景/`，支持 png、jpg、jpeg、webp、gif、svg，可按地点或角色建子目录。
+- 背景音乐放入 `figure/bgm/`，支持 mp3、ogg、wav、flac、m4a。
+- 解压后的 chara 模型按 `figure/chara/<角色>/<服装>/` 放置，复制**完整服装目录**：`.model3.json`、`.moc3`、贴图、动作、表情缺一不可；模型引用的共享目录也要保留。zip 模型包则可通过 `galcode cli prepare-live2d figure` 准备。
+- 新素材会在下次索引、生成或编译时被读取，无需重启 TUI。可以对 AI 说「重新读取本地素材清单，列出新背景和音乐，以及每个角色可用的 Live2D 服装」。若未识别，让它重新读取 `galcode://assets`，不要猜素材 ID 或动作名。
+
+完整的目录结构、格式和排查步骤见 **[素材添加指南](figure/README.md)**；零基础操作见 [新手手册](docs/小白看这里.md#加美术--音乐素材)。
 
 ## 环境自检与初始化
 
@@ -125,11 +134,11 @@ TUI 之外，旧版命令行仍然完整保留，通过 `cli` 前缀进入（直
 | `galcode cli preview outputs/x --port 3000` | 启动本地 WebGAL 预览服务器 |
 | `galcode cli record outputs/x --duration 60 --fps 30` | 录制成片（自动起预览、后期混 BGM，见下文「录制视频」） |
 | `galcode cli configure` | 配置旧版 CLI 用的 OpenAI 兼容接口（`OPENAI_*`，与 dsh 创作台互不影响） |
-| `galcode cli index` | 索引素材目录，生成 asset-manifest.json |
+| `galcode cli index figure` | 索引素材目录，生成 asset-manifest.json |
 | `galcode cli setup --root vendor` | 克隆 vendor 仓库（旧版语义的 setup） |
 | `galcode cli download-assets` | 用 curl 断点续传下载素材包，适合不稳定网络 |
 | `galcode cli install-live2d-runtime --from <dir>` | 安装 Live2D runtime 文件 |
-| `galcode cli prepare-live2d` | 解压可渲染的 Live2D 模型压缩包 |
+| `galcode cli prepare-live2d figure` | 解压可渲染的 Live2D 模型压缩包 |
 
 ## 录制视频
 

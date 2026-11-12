@@ -15,6 +15,12 @@ whenToUse: 从 galcode://assets 选择背景/BGM/Live2D 模型与服装时;确�
 
 素材 id 是稳定散列,story JSON 里只能引用清单中真实存在的 id。
 
+## 用户新增素材
+
+背景放在 `figure/背景/`,BGM 放在 `figure/bgm/`,支持子目录。完整 chara 模型放在 `figure/chara/<角色>/<服装>/`;必须保留 `.model3.json`、`.moc3`、贴图、动作、表情和模型引用的共享目录,不能只复制入口文件。zip 模型包用 `galcode cli prepare-live2d figure` 或生成流程准备。详细格式见 `figure/README.md`。
+
+用户添加文件后,在下次索引、生成或编译时重新读取 `galcode://assets`;不要依赖旧清单或猜素材 id。需要手动刷新源码安装时运行 `node bin/galcode.js cli index figure`。无需要求用户重启 TUI。识别不到时先确认目录、模型入口及引用文件是否完整。
+
 ## 服装(costume)标签
 
 同一角色有多套模型,按目录名区分服装:`默认常服`(live_default)、`2023 休闲服`(casual-2023)、`冬制服`(school_winter)、`夏制服`(school_summer)、`校服`、`生日服`、`梦祭服`、`联动服`、`打工服`、`振袖`、`sumimi 服`、`活动服`。学校场景优先制服,排练优先常服,演出优先活动服。优先选 motions/expressions 数量多的模型。
